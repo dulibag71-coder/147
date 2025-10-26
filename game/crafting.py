@@ -3,53 +3,35 @@ from __future__ import annotations
 from typing import Dict
 
 from . import settings
-
-
-CRAFTING_RECIPES = {
-    "Oxygen Tank": {
-        "cost": 3,
-        "effect": ("oxygen", 35),
-        "description": "응급 산소 보충",
-    },
-    "Energy Cell": {
-        "cost": 4,
-        "effect": ("energy", 40),
-        "description": "기어 전력 회복",
-    },
-    "Thermal Patch": {
-        "cost": 2,
-        "effect": ("temperature", 30),
-        "description": "체온 안정화",
-    },
-    "Nutrient Pack": {
-        "cost": 2,
-        "effect": ("nutrition", 30),
-        "description": "영양 보급",
-    },
-}
+from .player import Player
 
 
 class CraftingSystem:
-    def __init__(self, player) -> None:
+    def __init__(self, player: Player) -> None:
         self.player = player
         self.active = False
 
-    def toggle(self) -> None:
+    def toggle(self) -> bool:
         self.active = not self.active
+        return self.active
 
-    def available_recipes(self) -> Dict[str, tuple]:
-        return {
-            name: (recipe["cost"], recipe["description"])
-            for name, recipe in CRAFTING_RECIPES.items()
-            if self.player.inventory.get("scrap", 0) >= recipe["cost"]
-        }
+    def available_recipes(self) -> Dict[str, dict]:
+        affordable = {}
+        for name, recipe in settings.CRAFTING_RECIPES.items():
+            if all(self.player.inventory.get(resource, 0) >= amount for resource, amount in recipe["requirements"].items()):
+                affordable[name] = recipe
+        return affordable
 
-    def craft(self, recipe_key: str) -> str:
-        recipe = CRAFTING_RECIPES[recipe_key]
-        cost = recipe["cost"]
-        if self.player.inventory.get("scrap", 0) < cost:
-            return "스크랩 부족"
-        self.player.inventory["scrap"] -= cost
-        stat, amount = recipe["effect"]
-        self.player.stats.restore(stat, amount)
-        return f"{recipe_key} 제작 완료 (+{amount} {stat})"
+    def craft(self, recipe_name: str) -> str:
+        recipe = settings.CRAFTING_RECIPES[recipe_name]
+        if not all(self.player.inventory.get(resource, 0) >= amount for resource, amount in recipe["requirements"].items()):
+            return "자원이 부족합니다"
+        for resource, amount in recipe["requirements"].items():
+            if resource == "scrap":
+                if not self.player.consume_scrap(amount):
+                    return "스크랩이 부족합니다"
+            else:
+                self.player.inventory[resource] -= amount
+        for stat, amount in recipe["effects"].items():
+            self.player.stats.restore(stat, amount)
+        return f"{recipe_name} 제작 완료"

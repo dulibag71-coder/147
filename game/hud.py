@@ -1,64 +1,75 @@
 from __future__ import annotations
 
-from typing import Dict, Tuple
+from collections import deque
+from typing import Deque, Iterable
 
-import pygame
+from ursina import Text, color
 
 from . import settings
+from .player import Player
 
 
 class HUD:
-    def __init__(self, screen: pygame.Surface) -> None:
-        self.font = pygame.font.Font(settings.FONT_NAME, 16)
-        self.small_font = pygame.font.Font(settings.FONT_NAME, 12)
-        self.screen = screen
+    def __init__(self, player: Player) -> None:
+        self.player = player
+        self.stat_labels = {
+            "oxygen": Text(text="", origin=(-0.5, 0.5), position=(-0.85, 0.45), scale=1.1, color=color.azure),
+            "energy": Text(text="", origin=(-0.5, 0.5), position=(-0.85, 0.35), scale=1.1, color=color.orange),
+            "temperature": Text(text="", origin=(-0.5, 0.5), position=(-0.85, 0.25), scale=1.1, color=color.cyan),
+            "nutrition": Text(text="", origin=(-0.5, 0.5), position=(-0.85, 0.15), scale=1.1, color=color.lime),
+        }
+        self.health_label = Text(text="", origin=(-0.5, 0.5), position=(-0.85, 0.55), scale=1.2, color=color.red)
+        self.inventory_label = Text(text="", origin=(-0.5, 0.5), position=(-0.85, -0.35), scale=1.0, color=color.white)
+        self.messages: Deque[tuple[str, float]] = deque(maxlen=5)
+        self.message_widgets: list[Text] = [
+            Text(text="", origin=(-0.5, 0.5), position=(-0.65, -0.05 - i * 0.07), scale=1.0, color=color.white)
+            for i in range(4)
+        ]
+        self.crafting_label = Text(text="", origin=(-0.5, 0.5), position=(0.7, 0.3), scale=1.05, color=color.white)
+        self.objective_label = Text(
+            text="탈출 모듈을 찾고 생존하라",
+            origin=(-0.5, 0.5),
+            position=(0, 0.45),
+            scale=1.2,
+            color=color.rgb(220, 220, 240),
+        )
 
-    def draw_stats(self, player, survival_damage: Dict[str, float]) -> None:
-        x = 10
-        y = 10
-        for key, value in player.stats.as_dict().items():
-            color = (200, 200, 200)
-            if value <= settings.STAT_CRITICAL_THRESHOLD:
-                color = (255, 120, 120)
-            text = self.font.render(f"{key.capitalize()}: {value:05.1f}", True, color)
-            self.screen.blit(text, (x, y))
-            y += 22
-        health = self.font.render(f"Health: {player.health:05.1f}", True, (255, 200, 200))
-        self.screen.blit(health, (x, y))
-        y += 22
-        scrap = self.font.render(f"Scrap: {player.inventory.get('scrap', 0)}", True, (180, 180, 180))
-        self.screen.blit(scrap, (x, y))
-        y += 22
-        if survival_damage:
-            warning = self.small_font.render(
-                ", ".join(f"-{key}" for key in survival_damage.keys()), True, (255, 150, 100)
-            )
-            self.screen.blit(warning, (x, y))
+    def update(self, dt: float) -> None:
+        self.health_label.text = f"HP {int(self.player.health)}"
+        inventory_text = "스크랩: " + str(self.player.inventory.get("scrap", 0))
+        self.inventory_label.text = inventory_text
+        stats = self.player.stats.as_dict()
+        for stat, label in self.stat_labels.items():
+            value = stats[stat]
+            warning = "!" if self.player.stats.is_critical(stat) else ""
+            label.text = f"{stat.upper():<9} {int(value):>3}{warning}"
+        self._refresh_messages(dt)
 
-    def draw_messages(self, messages: Tuple[str, ...]) -> None:
-        y = settings.WINDOW_HEIGHT - 60
-        for message in messages:
-            text = self.small_font.render(message, True, (200, 220, 240))
-            self.screen.blit(text, (10, y))
-            y += 16
+    def add_message(self, message: str) -> None:
+        self.messages.append((message, settings.HUD_MESSAGE_DURATION))
 
-    def draw_crafting(self, available_recipes: Dict[str, Tuple[int, str]]) -> None:
-        panel = pygame.Surface((250, 140), pygame.SRCALPHA)
-        panel.fill((10, 10, 10, 200))
-        title = self.font.render("Crafting", True, (255, 255, 255))
-        panel.blit(title, (10, 10))
-        y = 40
-        for idx, (recipe, data) in enumerate(available_recipes.items(), start=1):
-            cost, description = data
-            text = self.small_font.render(f"[{idx}] {recipe}: {description} (Scrap {cost})", True, (220, 220, 220))
-            panel.blit(text, (10, y))
-            y += 18
-        self.screen.blit(panel, (settings.WINDOW_WIDTH - 260, 10))
+    def _refresh_messages(self, dt: float) -> None:
+        remaining = deque(maxlen=self.messages.maxlen)
+        for index, (message, timer) in enumerate(self.messages):
+            timer -= dt
+            if timer > 0:
+                remaining.append((message, timer))
+                if index < len(self.message_widgets):
+                    self.message_widgets[index].text = message
+            elif index < len(self.message_widgets):
+                self.message_widgets[index].text = ""
+        for i in range(len(remaining), len(self.message_widgets)):
+            self.message_widgets[i].text = ""
+        self.messages = remaining
 
-    def draw_game_over(self) -> None:
-        overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
-        overlay.fill((5, 5, 5, 210))
-        self.screen.blit(overlay, (0, 0))
-        text = self.font.render("MISSION FAILED", True, (255, 120, 120))
-        rect = text.get_rect(center=(settings.WINDOW_WIDTH // 2, settings.WINDOW_HEIGHT // 2))
-        self.screen.blit(text, rect)
+    def show_crafting(self, recipes: Iterable[str]) -> None:
+        if not recipes:
+            self.crafting_label.text = "사용 가능한 제작이 없습니다"
+        else:
+            lines = ["[C] 제작 모드"]
+            for index, recipe in enumerate(recipes, start=1):
+                lines.append(f"{index}. {recipe}")
+            self.crafting_label.text = "\n".join(lines)
+
+    def hide_crafting(self) -> None:
+        self.crafting_label.text = ""

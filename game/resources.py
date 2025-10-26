@@ -1,41 +1,44 @@
 from __future__ import annotations
 
 import random
-from typing import Dict, Tuple
+from typing import Dict
 
-import pygame
+from ursina import Entity, Vec3
 
 from . import settings
+from .player import Player
 
 
-class ResourceNode(pygame.sprite.Sprite):
-    def __init__(self, kind: str, position: Tuple[int, int]):
-        super().__init__()
-        self.kind = kind
-        self.amount = settings.RESOURCE_TYPES[kind]["amount"]
-        self.image = pygame.Surface((20, 20))
-        self.image.fill(settings.RESOURCE_TYPES[kind]["color"])
-        self.rect = self.image.get_rect(center=position)
-
-    @staticmethod
-    def random_kind() -> str:
-        return random.choice(list(settings.RESOURCE_TYPES.keys()))
-
-    @staticmethod
-    def random_position() -> Tuple[int, int]:
-        margin = 40
-        return (
-            random.randint(margin, settings.WINDOW_WIDTH - margin),
-            random.randint(margin, settings.WINDOW_HEIGHT - margin),
+class ResourceNode(Entity):
+    def __init__(self, kind: str, position: Vec3) -> None:
+        data = settings.RESOURCE_KINDS[kind]
+        super().__init__(
+            model="cube",
+            color=data["color"],
+            scale=(1.2, 0.6, 1.2),
+            collider="box",
+            position=position + Vec3(0, 0.4, 0),
         )
+        self.kind = kind
 
+    @classmethod
+    def random(cls) -> "ResourceNode":
+        kind = random.choice(list(settings.RESOURCE_KINDS.keys()))
+        pos = Vec3(
+            random.uniform(-settings.ARENA_SIZE, settings.ARENA_SIZE),
+            0,
+            random.uniform(-settings.ARENA_SIZE, settings.ARENA_SIZE),
+        )
+        return cls(kind, pos)
 
-def gather_resource(player, node: ResourceNode) -> Dict[str, int]:
-    inventory_updates: Dict[str, int] = {}
-    if node.kind == "scrap":
-        player.inventory["scrap"] = player.inventory.get("scrap", 0) + node.amount
-        inventory_updates["scrap"] = node.amount
-    else:
-        player.stats.restore(node.kind, node.amount)
-        inventory_updates[node.kind] = node.amount
-    return inventory_updates
+    def gather(self, player: Player) -> str:
+        data = settings.RESOURCE_KINDS[self.kind]
+        if "value" in data:
+            player.add_resource(self.kind, data["value"])
+            return f"{self.kind} +{data['value']}"
+        if "restore" in data:
+            restored: Dict[str, float] = data["restore"]
+            for stat, amount in restored.items():
+                player.stats.restore(stat, amount)
+            return f"{self.kind} 자원 사용"
+        return "획득"

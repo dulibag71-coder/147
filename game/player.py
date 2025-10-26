@@ -1,81 +1,95 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Tuple
+from collections import defaultdict
+from typing import Dict, Iterable, Optional
 
-import pygame
+from ursina import Entity, Vec3, color, held_keys
 
 from . import settings
+from .stats import SurvivalStats
 
 
-@dataclass
-class SurvivalStats:
-    oxygen: float = settings.STAT_MAX
-    energy: float = settings.STAT_MAX
-    temperature: float = settings.STAT_MAX
-    nutrition: float = settings.STAT_MAX
-
-    def as_dict(self) -> Dict[str, float]:
-        return {
-            "oxygen": self.oxygen,
-            "energy": self.energy,
-            "temperature": self.temperature,
-            "nutrition": self.nutrition,
-        }
-
-    def update(self, delta: float) -> Dict[str, float]:
-        depleted = {}
-        for key, rate in settings.STAT_DEPLETION_RATES.items():
-            value = max(0, getattr(self, key) - rate * (delta / 60.0))
-            if value != getattr(self, key):
-                depleted[key] = getattr(self, key) - value
-            setattr(self, key, value)
-        return depleted
-
-    def restore(self, key: str, amount: float) -> None:
-        setattr(self, key, min(settings.STAT_MAX, getattr(self, key) + amount))
-
-
-class Player(pygame.sprite.Sprite):
-    def __init__(self, position: Tuple[int, int]) -> None:
-        super().__init__()
-        self.image = pygame.Surface((32, 32))
-        self.image.fill((80, 160, 255))
-        self.rect = self.image.get_rect(center=position)
-        self.velocity = pygame.Vector2(0, 0)
+class Player(Entity):
+    def __init__(self) -> None:
+        super().__init__(
+            model="cube",
+            color=color.rgb(90, 150, 255),
+            scale=(1.0, 2.0, 1.0),
+            collider="box",
+        )
+        self.health = settings.PLAYER_MAX_HEALTH
         self.stats = SurvivalStats()
-        self.health = float(settings.PLAYER_MAX_HEALTH)
+        self.inventory: Dict[str, int] = defaultdict(int)
         self.attack_cooldown = 0.0
-        self.inventory: Dict[str, int] = {
-            "scrap": 0,
-        }
+        self._attack_trigger = False
 
-    def update(self, dt: float, keys: pygame.key.ScancodeWrapper) -> None:
-        self.velocity.xy = 0, 0
-        if keys[pygame.K_w]:
-            self.velocity.y = -1
-        if keys[pygame.K_s]:
-            self.velocity.y += 1
-        if keys[pygame.K_a]:
-            self.velocity.x = -1
-        if keys[pygame.K_d]:
-            self.velocity.x += 1
-        if self.velocity.length_squared() > 0:
-            self.velocity = self.velocity.normalize() * settings.PLAYER_SPEED
-        self.rect.centerx += int(self.velocity.x * dt)
-        self.rect.centery += int(self.velocity.y * dt)
-        self.rect.clamp_ip(pygame.Rect(0, 0, settings.WINDOW_WIDTH, settings.WINDOW_HEIGHT))
-        self.stats.update(dt)
+    def update(self, dt: float) -> None:
+        move_input = Vec3(held_keys["d"] - held_keys["a"], 0, held_keys["w"] - held_keys["s"])
+        if move_input.length():
+            move_input = move_input.normalized()
+        displacement = (self.forward * move_input.z + self.right * move_input.x) * settings.PLAYER_SPEED * dt
+        sprinting = held_keys["shift"] and self.stats.energy > 0
+        if sprinting:
+            displacement *= settings.SPRINT_MULTIPLIER
+            self.stats.consume("energy", 12.0 * dt)
+        self.position += displacement
+        self.rotation_y += (held_keys["q"] - held_keys["e"]) * settings.PLAYER_ROTATION_SPEED * dt
+        self.position = Vec3(
+            max(-settings.ARENA_SIZE, min(settings.ARENA_SIZE, self.x)),
+            self.y,
+            max(-settings.ARENA_SIZE, min(settings.ARENA_SIZE, self.z)),
+        )
         self.attack_cooldown = max(0.0, self.attack_cooldown - dt)
+        self.stats.tick(dt)
 
-    def can_attack(self) -> bool:
-        return self.attack_cooldown <= 0.0
+    def trigger_attack(self) -> None:
+        self._attack_trigger = True
 
-    def perform_attack(self) -> None:
+    def perform_attack(self, enemies: Iterable["Enemy"]) -> Optional["Enemy"]:
+        if self.attack_cooldown > 0 or not self._attack_trigger:
+            self._attack_trigger = False
+            return None
+        self._attack_trigger = False
         self.attack_cooldown = settings.PLAYER_ATTACK_COOLDOWN
+        best_target: Optional["Enemy"] = None
+        best_distance = settings.PLAYER_ATTACK_RANGE + 1
+        forward = self.forward.normalized()
+        for enemy in enemies:
+            to_enemy = enemy.position - self.position
+            distance = to_enemy.length()
+            if distance > settings.PLAYER_ATTACK_RANGE:
+                continue
+            if distance <= 0:
+                continue
+            if forward.dot(to_enemy.normalized()) < settings.PLAYER_ATTACK_ARC:
+                continue
+            if distance < best_distance:
+                best_distance = distance
+                best_target = enemy
+        if best_target:
+            best_target.take_damage(settings.PLAYER_MELEE_DAMAGE)
+        return best_target
 
     def take_damage(self, amount: float) -> None:
         self.health = max(0.0, self.health - amount)
 
     def is_alive(self) -> bool:
         return self.health > 0
+
+    def add_resource(self, kind: str, amount: int) -> None:
+        self.inventory[kind] += amount
+
+    def consume_scrap(self, amount: int) -> bool:
+        if self.inventory["scrap"] < amount:
+            return False
+        self.inventory["scrap"] -= amount
+        return True
+
+    def refill_survival(self) -> None:
+        self.stats.refill_all()
+
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover
+    from .enemy import Enemy

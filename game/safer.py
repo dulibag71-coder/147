@@ -1,54 +1,40 @@
 from __future__ import annotations
 
-import math
-from typing import Optional
-
-import pygame
+from ursina import Entity, Vec3, color
 
 from . import settings
-from .enemy import Enemy
+from .enemy import PurgeDrone, find_closest_enemy
 
 
-class Safer(pygame.sprite.Sprite):
-    def __init__(self, position):
-        super().__init__()
-        self.image = pygame.Surface((24, 24))
-        self.image.fill((180, 255, 200))
-        self.rect = self.image.get_rect(center=position)
+class Safer(Entity):
+    def __init__(self, player: "Player") -> None:
+        super().__init__(
+            model="cube",
+            color=color.rgb(240, 220, 120),
+            scale=(0.8, 0.4, 0.8),
+        )
+        self.player = player
+        self.shot_timer = settings.SAFER_ATTACK_INTERVAL
         self.support_timer = settings.SAFER_SUPPORT_INTERVAL
-        self.shot_cooldown = 0.0
 
-    def update(self, dt: float, player_rect: pygame.Rect, enemies: pygame.sprite.Group) -> Optional[Enemy]:
-        # Follow the player with a small offset
-        target = pygame.Vector2(player_rect.center)
-        current = pygame.Vector2(self.rect.center)
-        direction = target - current
-        if direction.length_squared() > 4:
-            move = direction.normalize() * settings.SAFER_SPEED
-            self.rect.centerx += int(move.x * dt)
-            self.rect.centery += int(move.y * dt)
-
+    def update(self, dt: float, enemies: list[PurgeDrone]) -> None:
+        orbit_target = self.player.position + self.player.right * settings.SAFER_ORBIT_DISTANCE
+        orbit_target += Vec3(0, settings.SAFER_VERTICAL_OFFSET, 0)
+        self.position = self.position.lerp(orbit_target, min(1, dt * 2.5))
+        self.look_at(self.player.position)
+        self.shot_timer -= dt
         self.support_timer -= dt
-        self.shot_cooldown = max(0.0, self.shot_cooldown - dt)
+        if self.shot_timer <= 0:
+            target = find_closest_enemy(enemies, self.position, settings.SAFER_ATTACK_RANGE)
+            if target:
+                target.take_damage(settings.SAFER_SHOT_DAMAGE)
+                self.shot_timer = settings.SAFER_ATTACK_INTERVAL
+        if self.support_timer <= 0:
+            self.player.stats.restore("energy", settings.SAFER_SUPPORT_AMOUNT)
+            self.support_timer = settings.SAFER_SUPPORT_INTERVAL
 
-        # Find enemy in range
-        target_enemy = None
-        closest_distance = math.inf
-        for enemy in enemies:
-            distance = pygame.Vector2(enemy.rect.center).distance_to(current)
-            if distance <= settings.SAFER_SHOT_RANGE and distance < closest_distance:
-                closest_distance = distance
-                target_enemy = enemy
-        return target_enemy
 
-    def can_support(self) -> bool:
-        return self.support_timer <= 0
+from typing import TYPE_CHECKING
 
-    def reset_support(self) -> None:
-        self.support_timer = settings.SAFER_SUPPORT_INTERVAL
-
-    def can_shoot(self) -> bool:
-        return self.shot_cooldown <= 0
-
-    def reset_shot(self) -> None:
-        self.shot_cooldown = settings.SAFER_SHOT_COOLDOWN
+if TYPE_CHECKING:  # pragma: no cover
+    from .player import Player
