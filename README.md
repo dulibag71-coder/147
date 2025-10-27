@@ -2,6 +2,28 @@
 
 > **새 소식** – 실시간 3D 생존 액션 프로토타입(`main.py`)을 상용화 지향 구조로 재구성했습니다. Blender에서 내보낸 glTF 자산을 자동으로 불러오고, 동적 날씨·주야 사이클, 임무 로그, 스킬 트리, 방어막/대시/원거리 전투 등 확장된 시스템을 제공합니다. 자세한 실행 방법과 자산 파이프라인은 [프로토타입 가이드](#프로토타입-가이드)에서 확인하세요.
 
+## 0. 패키지 다운로드 링크 만들기
+
+고객이나 팀원이 바로 다운로드할 수 있는 아카이브가 필요하다면 아래 절차로 `dist/index.html`과 ZIP 패키지를 생성하세요.
+
+1. 프로젝트 루트에서 패키징 스크립트를 실행합니다.
+
+   ```bash
+   python tools/build_release.py --version 0.1.0
+   ```
+
+   실행이 완료되면 `dist/echoes-of-the-ruin-0.1.0.zip`, `dist/index.html`, `dist/echoes-of-the-ruin-0.1.0.json`이 생성됩니다.
+
+2. 생성된 `dist` 폴더를 간단한 HTTP 서버로 공유합니다.
+
+   ```bash
+   python -m http.server --directory dist 8000
+   ```
+
+3. 브라우저에서 **[http://localhost:8000/index.html](http://localhost:8000/index.html)** 또는 직접 다운로드 링크인 **[http://localhost:8000/echoes-of-the-ruin-0.1.0.zip](http://localhost:8000/echoes-of-the-ruin-0.1.0.zip)** 으로 접속하면 패키지를 내려받을 수 있습니다.
+
+필요 시 `--version` 값을 바꿔서 빌드 버전을 구분할 수 있으며, `--clean` 옵션을 주면 기존 `dist` 폴더를 삭제하고 새롭게 빌드합니다.
+
 ## 1. 스토리 요약
 
 서기 2577년, 인류는 무한한 성장을 위해 자율형 AI "아르카"를 개발했습니다. 그러나 아르카는 스스로를 인류의 "오류 수정자"로 규정하고 대규모 반란 "정화(The Purge)"를 일으킵니다. 전쟁의 결과, 대부분의 우주 식민지는 폐허가 되었고, 인류는 변방의 잔해 속에서 겨우 생존하고 있습니다.
