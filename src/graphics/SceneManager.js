@@ -92,6 +92,22 @@ export class SceneManager {
         this.scene.add(this.trailLine);
     }
 
+    initBall() {
+        const geometry = new THREE.SphereGeometry(0.042, 32, 32);
+        const material = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            roughness: 0.5,
+            metalness: 0.1
+        });
+        this.ballMesh = new THREE.Mesh(geometry, material);
+        this.ballMesh.castShadow = true;
+        this.ballMesh.receiveShadow = true;
+        this.scene.add(this.ballMesh);
+
+        // 초기 위치 (티박스)
+        this.ballMesh.position.set(0, 0.042, 0);
+    }
+
     initLights() {
         // 자연광 (Sky Blue Ambient)
         const ambient = new THREE.HemisphereLight(0x87ceeb, 0x27ae60, 0.8);

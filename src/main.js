@@ -51,7 +51,7 @@ class AirSwingApp {
 
     async init() {
         console.log('AirSwing Web 초기화 중...');
-        this.ui.updateProgress(10);
+        this.ui.updateProgress(10, '데이터 로딩 중...');
 
         try {
             // Failsafe Timeout (5 seconds)
@@ -63,21 +63,22 @@ class AirSwingApp {
             }, 5000);
 
             // 1. 물리 엔진 초기화
+            this.ui.updateProgress(30, '물리 엔진 초기화 중...');
             await this.physics.init();
-            this.ui.updateProgress(40);
 
-            // 2. 비전 엔진 초기화
+            // 2. 렌더링 엔진 초기화 대기 (SceneManager는 생성자에서 이미 초기화됨)
+            this.ui.updateProgress(60, '월드 렌더링 생성 중...');
+
+            // 3. 비전 엔진 초기화
+            this.ui.updateProgress(80, '스윙 감지 모듈 준비 중...');
             await this.vision.init(() => {
                 if (this.state === 'address' || this.state === 'loading') {
                     console.log('Vision Ready -> Setting Address State');
                     this.setGameState('ready');
                 }
             });
-            this.ui.updateProgress(70);
 
-            // 3. UI 설정
-            this.clubs.updateUI();
-            this.ui.updateProgress(100);
+            this.ui.updateProgress(100, '모든 준비가 완료되었습니다!');
 
             clearTimeout(timeout);
             this.onInitComplete();
@@ -219,7 +220,7 @@ class AirSwingApp {
 
             // 3. 미니맵 & HUD 업데이트
             this.minimap.draw({
-                ballPos: this.physics.ball ? this.physics.ball.position : { x: 0, y: 0 },
+                ballPos: this.scene.ballMesh ? this.scene.ballMesh.position : { x: 0, y: 0 },
                 wind: this.env.state
             });
         };

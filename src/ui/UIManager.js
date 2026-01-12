@@ -19,7 +19,8 @@ export class UIManager {
 
         this.shotResult = document.getElementById('shot-result');
         this.loader = document.getElementById('loader');
-        this.progress = document.getElementById('load-bar'); // Match index.html
+        this.progress = document.getElementById('load-bar');
+        this.loadStatus = document.getElementById('load-status');
 
         // Rebrand Loader
         if (this.loader) {
@@ -55,8 +56,11 @@ export class UIManager {
         }
     }
 
-    updateProgress(percent) {
+    updateProgress(percent, statusText) {
         if (this.progress) this.progress.style.width = `${percent}%`;
+        if (this.loadStatus && statusText) {
+            this.loadStatus.innerText = statusText;
+        }
     }
 
     hideLoader() {

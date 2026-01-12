@@ -117,19 +117,23 @@ export class PhysicsEngine {
     }
 
     checkBallStatus() {
-        if (!this.ball) return 'none';
+        if (!this.ball || !Ammo) return 'FAIRWAY';
 
-        const pos = this.ball.position;
+        const transform = new Ammo.btTransform();
+        this.ball.getMotionState().getWorldTransform(transform);
+        const origin = transform.getOrigin();
+        const px = origin.x();
+        const pz = origin.z();
 
         // 1. OB 체크 (범위 밖)
-        if (Math.abs(pos.x) > 150 || pos.z < -500 || pos.z > 50) {
+        if (Math.abs(px) > 150 || pz < -500 || pz > 50) {
             return 'OB';
         }
 
         // 2. 지형 판정
         for (const terrain of this.terrains) {
             const b = terrain.bounds;
-            if (pos.x >= b.xMin && pos.x <= b.xMax && pos.z >= b.zMin && pos.z <= b.zMax) {
+            if (px >= b.xMin && px <= b.xMax && pz >= b.zMin && pz <= b.zMax) {
                 return terrain.type;
             }
         }
@@ -138,7 +142,7 @@ export class PhysicsEngine {
     }
 
     update(dt) {
-        if (this.world) {
+        if (this.world && this.ball) {
             this.applyAerodynamics(dt);
             this.world.stepSimulation(dt, 10);
 
@@ -160,22 +164,23 @@ export class PhysicsEngine {
     }
 
     applyAerodynamics(dt) {
-        if (!this.ball) return;
+        if (!this.ball || !Ammo) return;
 
         // 1. 마그누스 효과 (Spin에 의한 양력/커브)
-        // FL = Cm * (w x v)
         const vel = this.ball.getLinearVelocity();
-        const lift = new Ammo.btVector3();
+        const vz = vel.z();
 
         // 외적 연산 (임시 간소화 구현: 사이드 스핀 -> X축 굴곡)
-        const sideSwing = this.spin.y() * vel.z() * this.MAGNUS_COEFF;
-        const liftForce = this.spin.x() * vel.z() * this.MAGNUS_COEFF; // 백스핀 -> 양력
+        const sideSwing = this.spin.y() * vz * this.MAGNUS_COEFF;
+        const liftForce = this.spin.x() * vz * this.MAGNUS_COEFF; // 백스핀 -> 양력
 
         this.ball.applyCentralForce(new Ammo.btVector3(sideSwing, liftForce, 0));
 
         // 2. 공기 저항 (Drag)
-        const drag = vel.op_mul(-0.01);
-        this.ball.applyCentralForce(drag);
+        const dragX = vel.x() * -0.01;
+        const dragY = vel.y() * -0.01;
+        const dragZ = vel.z() * -0.01;
+        this.ball.applyCentralForce(new Ammo.btVector3(dragX, dragY, dragZ));
     }
 
     setInitialShot(velocity, spin) {
