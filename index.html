@@ -254,7 +254,11 @@
 <body>
     <header>
         <div class="logo">GOLF UNIVERSE</div>
-        <div class="coin-balance">🪙 <span id="coin-amount">1,250</span> G</div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
+            <div class="coin-balance">🪙 <span id="coin-amount">0</span> G</div>
+            <div style="font-size:10px; color:var(--primary); font-weight:bold;">LV.<span id="user-level">1</span> <span
+                    id="user-xp">0</span>/1000 XP</div>
+        </div>
     </header>
 
     <!-- Home Page -->
@@ -321,30 +325,39 @@
     <!-- Nasmo Page -->
     <div id="page-nasmo" class="page">
         <h2 style="padding:20px; margin:0;">나스모 (나의 스윙 모션)</h2>
-        <div class="nasmo-grid">
-            <div class="nasmo-item">
-                <div class="nasmo-thumb">▶</div>
-                <div style="padding:10px; font-size:12px;">2024.01.12<br>드라이버 스윙</div>
-            </div>
-            <div class="nasmo-item">
-                <div class="nasmo-thumb">▶</div>
-                <div style="padding:10px; font-size:12px;">2024.01.10<br>아이언 스윙</div>
-            </div>
+        <div id="nasmo-list" class="nasmo-grid">
+            <!-- Dynamic Content -->
+        </div>
+        <div id="nasmo-empty" style="text-align:center; padding:50px 20px; color:#999;">
+            <div style="font-size:50px; margin-bottom:10px;">📹</div>
+            아직 녹화된 스윙 영상이 없습니다.<br>게임에서 샷을 하면 자동으로 저장됩니다.
         </div>
     </div>
 
     <!-- Stats Page -->
     <div id="page-stats" class="page">
         <h2 style="padding:20px; margin:0;">기록실 (Stats)</h2>
-        <div style="padding:0 20px;">
+        <div id="stats-content" style="padding:0 20px; display:none;">
             <div class="round-card" style="margin-bottom:10px;">
-                <div class="score" style="font-size:24px;">BEST SCORE: 68 (-4)</div>
-                <div style="font-size:12px; opacity:0.8;">평균 드라이버: 242m</div>
+                <div class="score" style="font-size:24px;">BEST SCORE: <span id="best-score">--</span></div>
+                <div style="font-size:12px; opacity:0.8;">평균 드라이버: <span id="avg-dist">--</span>m</div>
             </div>
             <table class="stats-table">
-                <td>78 (+6)</td>
-                </tr>
+                <thead>
+                    <tr>
+                        <th>날짜</th>
+                        <th>코스</th>
+                        <th>스코어</th>
+                    </tr>
+                </thead>
+                <tbody id="stats-list">
+                    <!-- Dynamic Content -->
+                </tbody>
             </table>
+        </div>
+        <div id="stats-empty" style="text-align:center; padding:50px 20px; color:#999;">
+            <div style="font-size:50px; margin-bottom:10px;">📊</div>
+            아직 플레이 기록이 없습니다.<br>첫 번째 라운드를 완료하고 기록을 확인하세요!
         </div>
     </div>
 
@@ -412,12 +425,23 @@
     </div>
 
     <!-- 4. Equipment Shop (Already Added) -->
+    <!-- More Page -->
+    <div id="page-more" class="page">
+        <h2 style="padding:20px; margin:0;">설정 및 더보기</h2>
+        <div style="padding:20px;">
+            <button onclick="resetDB()"
+                style="width:100%; padding:15px; background:#ff4444; color:white; border:none; border-radius:10px; font-weight:bold;">데이터
+                초기화 (Reset DB)</button>
+            <p style="font-size:12px; color:#999; margin-top:10px; text-align:center;">초기화 시 모든 기록, 코인, 나스모가 삭제됩니다.</p>
+        </div>
+    </div>
+
     <div class="bottom-nav">
         <div class="item active" onclick="showPage('page-home')">🏠<br>홈</div>
         <div class="item" onclick="showPage('page-stats')">👤<br>기록실</div>
         <div class="item" onclick="showPage('page-nasmo')">🏌️‍♂️<br>나스모</div>
         <div class="item" onclick="showPage('page-remote')">🎮<br>리모컨</div>
-        <div class="item">☰<br>더보기</div>
+        <div class="item" onclick="showPage('page-more')">☰<br>더보기</div>
     </div>
 
     <script>

@@ -1,54 +1,145 @@
+const DB_KEY = 'golf_universe_db';
+
 class MobileApp {
     constructor() {
-        this.state = {
-            user: 'User1',
-            equippedBall: 'standard',
-            gPoints: 12500
-        };
+        this.db = this.getDB();
         this.initEventListeners();
         this.startSync();
+        this.syncUI();
+    }
+
+    getDB() {
+        const raw = localStorage.getItem(DB_KEY);
+        if (!raw) {
+            return {
+                coins: 0,
+                xp: 0,
+                level: 1,
+                rounds: [],
+                nasmos: [],
+                inventory: { equippedBall: 'standard' }
+            };
+        }
+        return JSON.parse(raw);
+    }
+
+    saveDB() {
+        localStorage.setItem(DB_KEY, JSON.stringify(this.db));
+        this.syncUI();
+    }
+
+    syncUI() {
+        // Update Coins
+        const coinEl = document.getElementById('coin-amount');
+        if (coinEl) coinEl.innerText = this.db.coins.toLocaleString();
+
+        // Update Level/XP
+        const levelEl = document.getElementById('user-level');
+        const xpEl = document.getElementById('user-xp');
+        if (levelEl) levelEl.innerText = this.db.level;
+        if (xpEl) xpEl.innerText = this.db.xp;
+
+        // Update Stats
+        const statsEmpty = document.getElementById('stats-empty');
+        const statsContent = document.getElementById('stats-content');
+        if (this.db.rounds.length > 0) {
+            statsEmpty.style.display = 'none';
+            statsContent.style.display = 'block';
+            const list = document.getElementById('stats-list');
+            list.innerHTML = this.db.rounds.map(r => `
+                <tr><td>${r.date}</td><td>${r.course}</td><td>${r.score}</td></tr>
+            `).join('');
+
+            // Calc Best Score & Avg
+            const scores = this.db.rounds.map(r => parseInt(r.score.split(' ')[0]));
+            document.getElementById('best-score').innerText = Math.min(...scores);
+            const dists = this.db.rounds.map(r => r.dist || 0);
+            const avg = dists.reduce((a, b) => a + b, 0) / dists.length;
+            document.getElementById('avg-dist').innerText = avg.toFixed(1);
+        } else {
+            statsEmpty.style.display = 'block';
+            statsContent.style.display = 'none';
+        }
+
+        // Update Nasmo
+        const nasmoEmpty = document.getElementById('nasmo-empty');
+        const nasmoList = document.getElementById('nasmo-list');
+        if (this.db.nasmos.length > 0) {
+            nasmoEmpty.style.display = 'none';
+            nasmoList.innerHTML = this.db.nasmos.map(n => `
+                <div class="nasmo-item">
+                    <div class="nasmo-thumb">▶</div>
+                    <div style="padding:10px; font-size:12px;">${n.date}<br>${n.club} 스윙</div>
+                </div>
+            `).join('');
+        } else {
+            nasmoEmpty.style.display = 'block';
+            nasmoList.innerHTML = '';
+        }
+
+        // Update Ranking
+        const rankingList = document.getElementById('ranking-list');
+        const rankingEmpty = document.getElementById('ranking-empty');
+        if (this.db.rounds.length > 0) {
+            rankingEmpty.style.display = 'none';
+            rankingList.innerHTML = `
+                <div style="padding:15px; display:flex; justify-content:space-between; border-bottom:1px solid #eee;">
+                    <span>🥇 김프로</span><b>128,400</b>
+                </div>
+                <div style="padding:15px; display:flex; justify-content:space-between; border-bottom:1px solid #eee;">
+                    <span>🥈 USER (나)</span><b>${this.db.coins * 10}</b>
+                </div>
+            `;
+        } else {
+            rankingEmpty.style.display = 'block';
+            rankingList.innerHTML = '';
+        }
     }
 
     initEventListeners() {
-        // --- 1. Remote Controller ---
         this.bindClick('btn-mulligan', () => this.sendAction('REMOTE', { command: 'mulligan' }));
         this.bindClick('btn-god-mode', () => this.sendAction('GOD_MODE', {}));
-        this.bindClick('btn-cam-follow', () => this.sendAction('REMOTE', { command: 'camera', mode: 'follow' }));
-        this.bindClick('btn-cam-top', () => this.sendAction('REMOTE', { command: 'camera', mode: 'top' }));
 
-        // --- QR Login ---
+        // QR Login
         this.bindClick('qr-scan-btn', () => {
-            alert('📷 QR 스캔 중... GolfUniverse 서버 인증...');
+            alert('📷 QR 스캔 중...');
             setTimeout(() => {
-                this.sendAction('QR_LOGIN', { userId: this.state.user, timestamp: Date.now() });
-                alert('✅ GolfUniverse 로그인 성공!');
-            }, 1000);
+                this.sendAction('QR_LOGIN', { userId: 'GOLFER_PRO', timestamp: Date.now() });
+                alert('✅ 로그인 성공!');
+            }, 800);
         });
 
-        // --- 4. Equipment ---
-        document.querySelectorAll('.equip-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const item = e.target.dataset.item;
-                const name = e.target.innerText;
-                this.equipItem(item, name);
-            });
-        });
+        // Navigation (Global function in index.html, but we hook it)
+        window.showPage = (id) => {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            document.querySelectorAll('.bottom-nav .item').forEach(item => item.classList.remove('active'));
+            const navMap = { 'page-home': 0, 'page-stats': 1, 'page-nasmo': 2, 'page-remote': 3 };
+            const index = navMap[id];
+            if (index !== undefined) document.querySelectorAll('.bottom-nav .item')[index].classList.add('active');
+            this.syncUI();
+        };
 
-        // --- 9. Caddy Settings ---
-        this.bindChange('caddy-voice-select', (val) => this.sendAction('CADDY_SETTING', { voice: val }));
+        // Buy Item
+        window.buyItem = (itemId, price) => {
+            if (this.db.coins >= price) {
+                this.db.coins -= price;
+                this.db.inventory.equippedBall = itemId.replace('_ball', '');
+                this.saveDB();
+                this.sendAction('EQUIP_ITEM', { itemId: this.db.inventory.equippedBall, itemName: itemId });
+                alert('장착 완료!');
+            } else {
+                alert('코인이 부족합니다!');
+            }
+        };
 
-        // --- 11. Wind/Weather ---
-        this.bindChange('wind-slider', (val) => this.sendAction('ENV_CONTROL', { type: 'wind', value: parseFloat(val) }));
-
-        // Navigation
-        document.querySelectorAll('.bottom-nav .item').forEach(item => {
-            item.addEventListener('click', () => {
-                document.querySelectorAll('.bottom-nav .item').forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-                const tabName = item.dataset.tab;
-                if (tabName) this.switchTab(tabName);
-            });
-        });
+        // Reset DB
+        window.resetDB = () => {
+            if (confirm('모든 데이터를 삭제하시겠습니까?')) {
+                localStorage.removeItem(DB_KEY);
+                location.reload();
+            }
+        };
     }
 
     bindClick(id, handler) {
@@ -56,24 +147,8 @@ class MobileApp {
         if (el) el.addEventListener('click', handler);
     }
 
-    bindChange(id, handler) {
-        const el = document.getElementById(id);
-        if (el) el.addEventListener('change', (e) => handler(e.target.value));
-    }
-
     sendAction(type, payload) {
-        const action = { type, payload, timestamp: Date.now() };
-        localStorage.setItem('airswing_app_action', JSON.stringify(action)); // Local Bridge
-        console.log(`[App -> Game] ${type}`, payload);
-    }
-
-    equipItem(itemId, itemName) {
-        this.state.equippedBall = itemId;
-        this.sendAction('EQUIP_ITEM', { itemId, itemName });
-        // UI Feedback
-        document.querySelectorAll('.equip-btn').forEach(b => b.style.borderColor = '#ddd');
-        document.querySelector(`.equip-btn[data-item="${itemId}"]`).style.borderColor = 'var(--primary)';
-        alert(`${itemName} 장착!`);
+        localStorage.setItem('airswing_app_action', JSON.stringify({ type, payload, timestamp: Date.now() }));
     }
 
     startSync() {
@@ -81,81 +156,58 @@ class MobileApp {
             const gameStateStr = localStorage.getItem('airswing_game_state');
             if (gameStateStr) {
                 const gameState = JSON.parse(gameStateStr);
-                this.updateDashboard(gameState);
+                this.handleGameState(gameState);
             }
-        }, 500);
+        }, 800);
     }
 
-    updateDashboard(state) {
-        // The 'state' object from localStorage might now contain a 'type' and 'payload'
-        // to indicate specific events from the game.
-        if (state.type) {
-            switch (state.type) {
-                case 'SHOT_DATA':
-                    const data = state.payload; // Assuming payload contains shot data
-                    // 샷 결과 반영 및 코인 업데이트
-                    this.updateElement('val-distance', `${data.distance?.toFixed(1)} m`);
-                    this.updateElement('val-speed', `${data.ballSpeed?.toFixed(1)} m/s`);
-                    this.updateElement('val-launch', `${data.launchAngle?.toFixed(1)} °`);
+    handleGameState(state) {
+        // Only process if it's new (timestamp based)
+        if (!state.lastShot || state.lastShot.timestamp === this.lastProcessedShot) return;
+        this.lastProcessedShot = state.lastShot.timestamp;
 
-                    if (data.rewardCoins) {
-                        let currentCoins = parseInt(localStorage.getItem('g_coins')) || 0;
-                        currentCoins += data.rewardCoins;
-                        localStorage.setItem('g_coins', currentCoins);
-                        // Ensure 'coin-amount' element exists in your HTML
-                        this.updateElement('coin-amount', currentCoins.toLocaleString());
-                    }
-                    break;
-                // Add other cases for different game state types if needed
-                default:
-                    console.log("Unhandled game state type:", state.type, state.payload);
-                    break;
-            }
-        } else {
-            // Fallback for older state structure or general updates
-            // 3. Swing Data Dashboard
-            if (state.lastShot) {
-                this.updateElement('val-distance', `${state.lastShot.distance?.toFixed(1)} m`);
-                this.updateElement('val-speed', `${state.lastShot.ballSpeed?.toFixed(1)} m/s`);
-                this.updateElement('val-launch', `${state.lastShot.launchAngle?.toFixed(1)} °`);
-            }
+        const shot = state.lastShot;
+
+        // 1. Update Real-time UI
+        const distEl = document.getElementById('val-distance');
+        const speedEl = document.getElementById('val-speed');
+        const launchEl = document.getElementById('val-launch');
+
+        if (distEl) distEl.innerText = `${shot.distance.toFixed(1)} m`;
+        if (speedEl) speedEl.innerText = `${shot.ballSpeed.toFixed(1)} m/s`;
+        if (launchEl) launchEl.innerText = `${shot.launchAngle.toFixed(1)} °`;
+
+        // 2. Add to DB Collections
+        this.db.coins += (shot.rewardCoins || 0);
+        this.db.xp += Math.round(shot.distance);
+
+        // Level Up check
+        if (this.db.xp >= 1000) {
+            this.db.xp -= 1000;
+            this.db.level += 1;
+            alert(`🎊 축하합니다! 레벨 ${this.db.level}(으)로 승급하셨습니다!`);
         }
 
-        // 2. Real-time Scorecard
-        if (state.score) {
-            this.updateElement('val-total-score', `${state.score.total || 0}`);
+        // Add Round
+        this.db.rounds.unshift({
+            date: new Date().toLocaleDateString(),
+            course: '오션뷰 CC',
+            score: shot.distance > 200 ? '72 (E)' : '75 (+3)',
+            dist: shot.distance
+        });
+
+        // Add Nasmo (every 2nd shot for variety)
+        if (this.db.rounds.length % 2 === 0) {
+            this.db.nasmos.unshift({
+                date: new Date().toLocaleString(),
+                club: shot.distance > 180 ? '드라이버' : '아이언'
+            });
         }
-    }
 
-    updateElement(id, text) {
-        const el = document.getElementById(id);
-        if (el) el.innerText = text;
+        this.saveDB();
     }
-
-    switchTab(tabName) {
-        // Simple visibility toggle for demo purposes
-        console.log('Switch tab:', tabName);
-        // hide all sections... show target...
-    }
-}
-
-// 아이템 샵 UI 주입 (데모용)
-function injectShopUI() {
-    const container = document.querySelector('.card-container');
-    const shopHTML = `
-        <div class="shop-section" style="background:white; margin-top:15px; padding:20px; border-radius:15px;">
-            <h3 style="margin:0 0 15px 0;">🎒 내 가방 (장착/해제)</h3>
-            <div style="display:flex; gap:10px;">
-                <button class="equip-btn" data-item="standard" style="padding:10px; flex:1; border:1px solid #ddd; border-radius:10px; background:#f8f9fa;">⚪ 기본볼</button>
-                <button class="equip-btn" data-item="pro" style="padding:10px; flex:1; border:1px solid #ddd; border-radius:10px; background:#f8f9fa;">⚪ 프로 (3pc)</button>
-                <button class="equip-btn" data-item="premium" style="padding:10px; flex:1; border:1px solid gold; border-radius:10px; background:#fffbe6;">🟡 골든볼</button>
-            </div>
-        </div>
-    `;
-    container.innerHTML += shopHTML;
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    injectShopUI();
     window.mobileApp = new MobileApp();
 });
