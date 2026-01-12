@@ -60,7 +60,8 @@ export class SyncService {
 
             case 'QR_LOGIN':
                 this.notifySubscribers('login_success', action.payload);
-                this.showToast(`🔑 [GolfUniverse] ${action.payload.userId}님 환영합니다!`);
+                this.showToast(`📱 모바일 연동 완료: ${action.payload.userId}님`);
+                this.showToast(`이제 모든 컨트롤은 스마트폰 앱에서 가능합니다.`);
                 break;
         }
     }

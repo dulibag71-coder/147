@@ -103,15 +103,14 @@ html {
 
 /* Right Panel */
 #right-panel {
+    display: none !important;
+    /* 모바일 연동 전용: PC 로컬 컨트롤 숨김 */
     position: absolute;
     right: 30px;
     top: 50%;
     transform: translateY(-50%);
     z-index: 15;
     width: 240px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
 }
 
 .panel-section {
