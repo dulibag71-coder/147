@@ -43,19 +43,58 @@ app.post('/api/auth/login', login);
 
 // Game Configuration (Server-side decision for items/settings)
 app.get('/api/game/config', (req, res) => {
-    // 실제 운영 환경에서는 사용자의 JWT를 확인하여 인벤토리 정보를 반환하겠지만,
-    // 여기서는 '서버에서 결정하는' 로직을 시뮬레이션하기 위해 추천 아이템을 반환합니다.
-    res.json({
-        equippedBall: {
-            id: 'premium_pro_ball',
-            name: '서버 추천: Pro V1x',
-            color: 0xffffff,
-            physicsMod: { restitution: 0.8, friction: 0.2 }
-        },
-        env: {
-            windSpeed: 2.5,
-            weather: 'sunny'
+    const userId = req.query.userId || 1; // 실제로는 JWT에서 추출
+    db.get(`SELECT equipped_ball FROM users WHERE id = ?`, [userId], (err, row) => {
+        if (err || !row) {
+            return res.json({ equippedBall: { id: 'standard', color: 0xffffff, name: 'Standard' } });
         }
+
+        const balls = {
+            standard: { id: 'standard', name: 'Standard', color: 0xffffff },
+            pro: { id: 'pro', name: 'Pro V1', color: 0xeeeeee },
+            premium: { id: 'premium', name: 'Golden Ball', color: 0xffd700 }
+        };
+
+        res.json({
+            equippedBall: balls[row.equipped_ball] || balls.standard,
+            env: { windSpeed: 2.5, weather: 'sunny' }
+        });
+    });
+});
+
+// 아이템 장착 (모바일 -> 서버)
+app.post('/api/user/equip', authenticateToken, (req, res) => {
+    const { itemId } = req.body;
+    const userId = req.user.id;
+    db.run(`UPDATE users SET equipped_ball = ? WHERE id = ?`, [itemId, userId], (err) => {
+        if (err) return res.status(500).json({ message: '장착 실패' });
+        res.json({ message: '장착 완료' });
+    });
+});
+
+// 원격 커맨드 발송 (모바일 -> 서버)
+app.post('/api/remote/command', authenticateToken, (req, res) => {
+    const { command, payload } = req.body;
+    const userId = req.user.id;
+    db.run(`INSERT INTO remote_commands (user_id, command, payload) VALUES (?, ?, ?)`,
+        [userId, command, JSON.stringify(payload)],
+        (err) => {
+            if (err) return res.status(500).json({ message: '명령 발송 실패' });
+            res.json({ message: '명령 발송됨' });
+        });
+});
+
+// 원격 커맨드 조회 및 처리 (게임 -> 서버)
+app.get('/api/remote/poll', (req, res) => {
+    const userId = req.query.userId || 1;
+    db.all(`SELECT * FROM remote_commands WHERE user_id = ? AND is_processed = 0`, [userId], (err, rows) => {
+        if (err || !rows.length) return res.json({ commands: [] });
+
+        // 가져온 명령들을 처리 완료 상태로 변경
+        const ids = rows.map(r => r.id).join(',');
+        db.run(`UPDATE remote_commands SET is_processed = 1 WHERE id IN (${ids})`);
+
+        res.json({ commands: rows.map(r => ({ type: r.command, payload: JSON.parse(r.payload) })) });
     });
 });
 
@@ -111,6 +150,22 @@ app.get('/api/admin/stats', authenticateToken, authorizeAdmin, getStats);
 app.post('/api/payments/checkout', authenticateToken, createCheckout);
 app.post('/api/payments/webhook', completePayment);
 
+// 게임 상태 저장 (게임 -> 서버)
+app.post('/api/user/state', (req, res) => {
+    const { userId, gameState } = req.body;
+    // 메모리에 임시 저장 (실제 운영 환경에선 Redis나 DB 권장)
+    if (!app.userStates) app.userStates = {};
+    app.userStates[userId] = { ...gameState, lastUpdated: Date.now() };
+    res.json({ success: true });
+});
+
+// 게임 상태 조회 (모바일 -> 서버)
+app.get('/api/user/state', authenticateToken, (req, res) => {
+    const userId = req.user.id;
+    const state = (app.userStates && app.userStates[userId]) || null;
+    res.json({ state });
+});
+
 app.listen(PORT, () => {
-    console.log(`AirSwing Backend Server running on http://localhost:${PORT}`);
+    console.log(`서버 실행 중: http://localhost:${PORT}`);
 });

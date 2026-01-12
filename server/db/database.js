@@ -20,8 +20,19 @@ function initializeTables() {
             role TEXT DEFAULT 'user', -- user | admin
             skill_level TEXT DEFAULT 'beginner',
             subscription TEXT DEFAULT 'free', -- free | pro
+            equipped_ball TEXT DEFAULT 'standard', -- 서버 연동용 장착 아이템
             subscription_start DATETIME,
             subscription_end DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+
+        // 5. 원격 커맨드 큐 (모바일 -> PC 브릿지)
+        db.run(`CREATE TABLE IF NOT EXISTS remote_commands (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            command TEXT,
+            payload TEXT,
+            is_processed INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
 

@@ -118,12 +118,24 @@ class MobileApp {
         this.bindClick('btn-god-mode', () => this.sendAction('GOD_MODE', {}));
 
         // QR Login
-        this.bindClick('qr-scan-btn', () => {
+        this.bindClick('qr-scan-btn', async () => {
             alert('📷 QR 스캔 중...');
-            setTimeout(() => {
-                this.sendAction('QR_LOGIN', { userId: 'GOLFER_PRO', timestamp: Date.now() });
-                alert('✅ 로그인 성공!');
-            }, 800);
+            // 실제로는 QR에 포함된 세션ID 등을 사용하겠지만, 여기서는 유저 인증 시뮬레이션
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: 'user@example.com', password: 'password123' })
+                });
+                const data = await res.json();
+                this.token = data.token;
+                localStorage.setItem('auth_token', this.token);
+
+                this.sendAction('QR_LOGIN', { userId: 'GOLFER_PRO', id: 1, timestamp: Date.now() });
+                alert('✅ 로그인 성공! PC와 연결되었습니다.');
+            } catch (err) {
+                alert('❌ 서버 연결 실패');
+            }
         });
 
         // Navigation (Global function in index.html, but we hook it)
@@ -138,12 +150,26 @@ class MobileApp {
         };
 
         // Buy Item
-        window.buyItem = (itemId, price) => {
+        window.buyItem = async (itemId, price) => {
             if (this.db.coins >= price) {
+                const pureId = itemId.replace('_ball', '');
+
+                // 서버 연동
+                if (this.token || localStorage.getItem('auth_token')) {
+                    await fetch('/api/user/equip', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${this.token || localStorage.getItem('auth_token')}`
+                        },
+                        body: JSON.stringify({ itemId: pureId })
+                    });
+                }
+
                 this.db.coins -= price;
-                this.db.inventory.equippedBall = itemId.replace('_ball', '');
+                this.db.inventory.equippedBall = pureId;
                 this.saveDB();
-                this.sendAction('EQUIP_ITEM', { itemId: this.db.inventory.equippedBall, itemName: itemId });
+                this.sendAction('EQUIP_ITEM', { itemId: pureId, itemName: itemId });
                 alert('장착 완료!');
             } else {
                 alert('코인이 부족합니다!');
@@ -164,18 +190,53 @@ class MobileApp {
         if (el) el.addEventListener('click', handler);
     }
 
-    sendAction(type, payload) {
-        localStorage.setItem('airswing_app_action', JSON.stringify({ type, payload, timestamp: Date.now() }));
+    async sendAction(type, payload) {
+        const action = { type, payload, timestamp: Date.now() };
+        // 1. 로컬 연동 (동일 기기)
+        localStorage.setItem('airswing_app_action', JSON.stringify(action));
+
+        // 2. 서버 브릿지 (다른 기기/원격 연동)
+        const token = this.token || localStorage.getItem('auth_token');
+        if (token && type !== 'QR_LOGIN') {
+            try {
+                await fetch('/api/remote/command', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ command: type, payload: payload })
+                });
+            } catch (err) {
+                console.warn('서버 브릿지 발송 실패:', err);
+            }
+        }
     }
 
-    startSync() {
-        setInterval(() => {
+    async startSync() {
+        setInterval(async () => {
+            // 1. 로컬 연동
             const gameStateStr = localStorage.getItem('airswing_game_state');
             if (gameStateStr) {
-                const gameState = JSON.parse(gameStateStr);
-                this.handleGameState(gameState);
+                this.handleGameState(JSON.parse(gameStateStr));
             }
-        }, 800);
+
+            // 2. 서버 연동 (토큰이 있을 때만)
+            const token = this.token || localStorage.getItem('auth_token');
+            if (token) {
+                try {
+                    const res = await fetch('/api/user/state', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (data.state) {
+                        this.handleGameState(data.state);
+                    }
+                } catch (err) {
+                    console.warn('서버 상태 동기화 실패:', err);
+                }
+            }
+        }, 1000);
     }
 
     handleGameState(state) {
