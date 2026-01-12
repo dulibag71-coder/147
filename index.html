@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AirSwing Web - Real Screen Golf</title>
+    <!-- Essential Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <script src="https://kripken.github.io/ammo.js/builds/ammo.js"></script>
+
+    <link rel="stylesheet" href="./src/style.css">
+</head>
+
+<body>
+    <div id="app">
+        <!-- Three.js Canvas -->
+        <canvas id="game-canvas"></canvas>
+
+        <!-- HUD (Top) -->
+        <div id="hud-top">
+            <div class="hud-item info-main">
+                <div class="label">PIN DISTANCE</div>
+                <div class="value">
+                    <span id="target-dist">320.5</span><span class="unit">m</span>
+                    <button id="admin-mobile-btn" class="icon-btn hidden" title="Admin Dashboard">⚙️</button>
+                </div>
+            </div>
+            <div class="hud-item info-sub">
+                <div class="wind-box">
+                    <div id="wind-arrow">↑</div>
+                    <div class="wind-text">
+                        <span id="wind-val">2.1</span><span class="unit">m/s</span>
+                    </div>
+                </div>
+                <div class="alt-box">
+                    <span class="label">ALT</span>
+                    <span id="alt-val">-2.5</span><span class="unit">m</span>
+                </div>
+            </div>
+            <div class="hud-item club-display">
+                <div id="current-club-name">DRIVER</div>
+                <div id="club-recommend">L: 10.5°</div>
+            </div>
+        </div>
+
+        <!-- Right Side: Settings & Club (Screen Golf Style) -->
+        <div id="right-panel">
+            <!-- Environment Settings -->
+            <div class="panel-section settings-grid">
+                <div class="setting-item" data-type="wind">
+                    <label>🌬️ WIND</label>
+                    <div class="dial-container" id="wind-dial">
+                        <div class="dial-hand"></div>
+                        <span class="dial-val">2</span>
+                    </div>
+                </div>
+                <div class="setting-item" data-type="green">
+                    <label>⛳ GREEN</label>
+                    <div class="toggle-group" id="green-speed-toggle">
+                        <button class="active" data-val="soft">S</button>
+                        <button data-val="normal">N</button>
+                        <button data-val="fast">F</button>
+                        <button data-val="pro">T</button>
+                    </div>
+                </div>
+                <div class="setting-item" data-type="slope">
+                    <label>🟩 SLOPE</label>
+                    <div class="toggle-group" id="slope-toggle">
+                        <button data-val="low">약</button>
+                        <button class="active" data-val="mid">중</button>
+                        <button data-val="high">강</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Club Selector (Vertical Wheel Style) -->
+            <div class="panel-section club-selector">
+                <div class="club-wheel" id="club-wheel">
+                    <div class="club-option prev">WOOD 3</div>
+                    <div class="club-option active">DRIVER</div>
+                    <div class="club-option next">IRON 5</div>
+                </div>
+                <div class="club-stats">
+                    <div class="stat">EST. <span id="est-dist">230</span>m</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Left Bottom: Minimap -->
+        <div id="minimap-container">
+            <canvas id="minimap"></canvas>
+            <div class="minimap-overlay">
+                <div id="hole-num">HOLE 1</div>
+                <div id="par-val">PAR 4</div>
+            </div>
+        </div>
+
+        <!-- Center Overlay: Pose & State -->
+        <div id="center-overlay">
+            <div id="address-guide" class="guide-box">
+                <div class="pulse"></div>
+                <p>카메라 앞에서 어드레스 하세요</p>
+            </div>
+
+            <div id="ready-status" class="hidden">
+                <div class="ready-text">READY</div>
+            </div>
+
+            <div id="impact-feedback" class="hidden">
+                <div class="flash"></div>
+                <div class="impact-text">IMPACT!</div>
+            </div>
+
+            <!-- Putter Gauge (Only in Putting Mode) -->
+            <div id="putter-gauge" class="hidden">
+                <div class="gauge-bar">
+                    <div id="gauge-fill"></div>
+                    <div class="target-marker"></div>
+                </div>
+                <div class="gauge-label">2.5m</div>
+            </div>
+        </div>
+
+        <!-- Vision Preview (Thumbnail) -->
+        <div id="vision-preview">
+            <video id="input-video" playsinline></video>
+            <canvas id="pose-canvas"></canvas>
+            <div class="fps-counter">FPS: <span id="fps-val">30</span></div>
+        </div>
+
+        <!-- Shot Result (Bottom) -->
+        <div id="shot-result" class="hidden">
+            <div class="result-grid">
+                <div class="res-item">BALL SPEED<br><span id="res-ball-speed">68.5</span></div>
+                <div class="res-item">LAUNCH<br><span id="res-launch">12.5</span></div>
+                <div class="res-item">SPIN<br><span id="res-spin">2450</span></div>
+                <div class="res-item">CARRY<br><span id="res-carry">225</span></div>
+                <div class="res-item highlighted">TOTAL<br><span id="res-total">245.2</span></div>
+            </div>
+        </div>
+
+        <!-- Loader -->
+        <div id="loader">
+            <div class="loader-inner">
+                <div class="logo">AIRSWING</div>
+                <div class="bar-container">
+                    <div id="load-bar"></div>
+                </div>
+                <p id="load-status">필드 렌더링 중...</p>
+            </div>
+        </div>
+
+        <!-- Subscription Upgrade Modal -->
+        <div id="payment-modal" class="modal hidden">
+            <div class="modal-content premium-box">
+                <button class="close-btn">&times;</button>
+                <h2>Premium Upgrade</h2>
+                <p class="subtitle">더 정교한 비거리 분석과 전용 코스를 경험하세요.</p>
+                <div class="pricing-card pro">
+                    <div class="badge">POPULAR</div>
+                    <h3>Pro Plan</h3>
+                    <div class="price">₩9,900<span>/mo</span></div>
+                    <ul>
+                        <li>✅ 정교한 스핀/발사각 분석</li>
+                        <li>✅ 전용 18홀 프리미엄 코스</li>
+                        <li>✅ 무제한 샷 히스토리 저장</li>
+                        <li>✅ 실시간 스윙 코칭 피드백</li>
+                    </ul>
+                    <button id="checkout-btn" class="cta-btn">지금 시작하기</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Dashboard Overlay -->
+        <div id="admin-dashboard" class="fullscreen-overlay hidden">
+            <div class="admin-sidebar">
+                <div class="admin-logo">MANAGER</div>
+                <nav>
+                    <button class="active" data-tab="stats">Dashboard</button>
+                    <button data-tab="users">Users</button>
+                    <button data-tab="payments">Payments</button>
+                    <button data-tab="centers">Centers (B2B)</button>
+                    <button id="admin-close">Exit</button>
+                </nav>
+            </div>
+            <div class="admin-main">
+                <header>
+                    <h1>Service Statistics</h1>
+                    <div class="user-info">Admin Mode</div>
+                </header>
+                <div class="admin-content" id="admin-tab-content">
+                    <!-- Dynamic content will be injected here -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <label>Total Users</label>
+                            <div class="val" id="stat-total-users">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <label>Pro Users</label>
+                            <div class="val" id="stat-pro-users">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <label>Revenue</label>
+                            <div class="val">₩<span id="stat-revenue">0</span></div>
+                        </div>
+                        <div class="stat-card">
+                            <label>Total Shots</label>
+                            <div class="val" id="stat-total-shots">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dependencies & Main -->
+    <script type="module" src="./src/main.js"></script>
+</body>
+
+</html>
