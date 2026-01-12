@@ -20,18 +20,31 @@ export class PhysicsEngine {
 
     async init() {
         return new Promise((resolve) => {
+            let attempts = 0;
             const checkAmmo = () => {
+                attempts++;
                 if (typeof Ammo === 'function') {
-                    Ammo().then((AmmoLib) => {
-                        window.Ammo = AmmoLib;
-                        this.setupPhysicsWorld();
-                        console.log('Ammo.js 월드 생성 완료');
+                    try {
+                        Ammo().then((AmmoLib) => {
+                            window.Ammo = AmmoLib;
+                            this.setupPhysicsWorld();
+                            console.log('Ammo.js 월드 생성 완료');
+                            resolve();
+                        }).catch(e => {
+                            console.error('Ammo Initialization Promise Error:', e);
+                            resolve(); // Continue anyway to hide loader
+                        });
+                    } catch (e) {
+                        console.error('Ammo Initialization Call Error:', e);
                         resolve();
-                    });
+                    }
                 } else if (typeof Ammo !== 'undefined' && Ammo.btVector3) {
-                    // 이미 로드된 경우
+                    // Already loaded globally (common for some CDNs)
                     this.setupPhysicsWorld();
                     resolve();
+                } else if (attempts > 10) {
+                    console.error('Ammo.js failed to load after 5 seconds');
+                    resolve(); // Failsafe
                 } else {
                     console.warn('Ammo.js 로딩 대기 중...');
                     setTimeout(checkAmmo, 500);

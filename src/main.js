@@ -105,13 +105,23 @@ class AirSwingApp {
             this.audio.announceShot('impact');
         } else if (newState === 'result') {
             const status = this.physics.checkBallStatus();
-            // 샷 결과 앱 동기화
+            const totalDist = this.physics.ball ? this.physics.ball.position.z * -1 : 0;
+
+            // 코인 보상 계산
+            let reward = 100; // 기본 참가 보상
+            if (totalDist > 250) reward += 200; // 장타 보상
+            if (status === 'FAIRWAY') reward += 100;
+
+            // 앱으로 보상 및 샷 데이터 전송
             this.sync.updateShotData({
-                distance: this.physics.ball ? this.physics.ball.position.z * -1 : 0, // 가상 거리
-                ballSpeed: 65 + Math.random() * 10, // 시뮬레이션 값
+                distance: totalDist,
+                ballSpeed: 65 + Math.random() * 10,
                 launchAngle: 12 + Math.random() * 4,
+                rewardCoins: reward,
                 timestamp: Date.now()
             });
+
+            this.ui.showNotification(`${reward} G-Coin 획득! 🪙`);
 
             if (status === 'FAIRWAY') this.audio.announceShot('good');
             else if (status === 'BUNKER') this.audio.announceShot('bunker');

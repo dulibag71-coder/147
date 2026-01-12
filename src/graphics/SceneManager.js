@@ -271,12 +271,19 @@ export class SceneManager {
     }
 
     setBallType(ballData) {
-        if (this.ballMesh) {
-            this.ballMesh.material.color.setHex(ballData.color);
-            // Trail color sync
-            if (this.trailMaterial) {
-                this.trailMaterial.color.setHex(ballData.color);
-            }
+        if (!this.ballMesh) return;
+        this.ballMesh.material.color.setHex(ballData.color);
+
+        // Trail Color Sync
+        if (ballData.name.includes('Golden')) {
+            this.trailMaterial.color.setHex(0xffd700); // Gold
+            this.trailMaterial.opacity = 1.0;
+        } else if (ballData.name.includes('Pro')) {
+            this.trailMaterial.color.setHex(0x00ffff); // Cyan
+            this.trailMaterial.opacity = 0.8;
+        } else {
+            this.trailMaterial.color.setHex(0x00ff00); // Standard Green
+            this.trailMaterial.opacity = 0.6;
         }
     }
 
