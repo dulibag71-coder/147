@@ -1,3 +1,5 @@
+import { SceneManager } from '../graphics/SceneManager.js';
+
 // ammo.js는 비동기 로딩이 필요함
 export class PhysicsEngine {
     constructor(app) {
@@ -8,17 +10,78 @@ export class PhysicsEngine {
         this.spin = null; // setupPhysicsWorld에서 초기화
         this.MAGNUS_COEFF = 0.0001; // 마그누스 효과 계수
 
-        // 지형 상수 및 물리 속성
-        this.TERRAIN_TYPES = {
-            FAIRWAY: { friction: 0.5, restitution: 0.3, color: 0x27ae60 },
-            ROUGH: { friction: 1.2, restitution: 0.1, color: 0x1e5631 },
-            BUNKER: { friction: 3.5, restitution: 0.0, color: 0xe3c18d },
-            GREEN: { friction: 0.2, restitution: 0.4, color: 0x2ecc71 },
-            WATER: { friction: 5.0, restitution: 0.0, color: 0x3498db },
-            OB: { type: 'OB' }
+        this.wind = { x: 0, y: 0, z: 0 }; // 초기 바람 세기
+
+        // 1. Area Types
+        this.AreaType = {
+            IN_PLAY: 'IN_PLAY',
+            OB: 'OB',
+            PENALTY_WATER: 'PENALTY_WATER',
+            PENALTY_LATERAL: 'PENALTY_LATERAL',
+            GREEN: 'GREEN',
+            FAIRWAY: 'FAIRWAY',
+            ROUGH: 'ROUGH',
+            BUNKER: 'BUNKER'
         };
 
-        this.wind = { x: 0, y: 0, z: 0 }; // 초기 바람 세기
+        // 2. Course Data (Simple Polygon Course)
+        this.courseAreas = [
+            // --- Boundaries ---
+            {
+                id: 'ob_left_1', type: this.AreaType.OB,
+                polygon: [[-200, -600], [-160, -600], [-160, 100], [-200, 100]]
+            },
+            {
+                id: 'ob_right_1', type: this.AreaType.OB,
+                polygon: [[160, -600], [200, -600], [200, 100], [160, 100]]
+            },
+
+            // --- Hazards ---
+            {
+                id: 'water_hz_1', type: this.AreaType.PENALTY_WATER,
+                polygon: [[-80, -350], [80, -350], [80, -300], [-80, -300]],
+                strokePenalty: 1
+            },
+
+            // --- Bunkers (New) ---
+            {
+                // Green-side Bunker (Left)
+                id: 'bunker_green_L', type: this.AreaType.BUNKER,
+                polygon: [[-35, -530], [-22, -530], [-22, -510], [-35, -510]],
+                friction: 3.5, restitution: 0.0
+            },
+            {
+                // Green-side Bunker (Right)
+                id: 'bunker_green_R', type: this.AreaType.BUNKER,
+                polygon: [[22, -540], [35, -540], [35, -520], [22, -520]],
+                friction: 3.5, restitution: 0.0
+            },
+            {
+                // Fairway Bunker
+                id: 'bunker_fairway', type: this.AreaType.BUNKER,
+                polygon: [[15, -250], [35, -250], [35, -210], [15, -210]],
+                friction: 3.5, restitution: 0.0
+            },
+
+            // --- Green ---
+            {
+                id: 'green_1', type: this.AreaType.GREEN,
+                polygon: [[-20, -550], [20, -550], [20, -500], [-20, -500]],
+                friction: 0.1, restitution: 0.5
+            },
+
+            // --- Fairway (Shaped) ---
+            // Dog-leg style or widening path
+            {
+                id: 'fairway_1', type: this.AreaType.FAIRWAY,
+                polygon: [
+                    [-30, -500], [30, -500], // Near Green
+                    [40, -300], [-40, -300], // Mid-section (Wide)
+                    [-20, -40], [20, -40]    // Tee landing zone
+                ],
+                friction: 0.5, restitution: 0.3
+            }
+        ];
     }
 
     async init() {
@@ -110,30 +173,43 @@ export class PhysicsEngine {
         this.terrains.push({ bounds, type });
     }
 
+    // 3. Point in Polygon Algorithm (Ray-Casting)
+    isPointInPolygon(point, vs) {
+        let x = point[0], y = point[1];
+        let inside = false;
+        for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+            let xi = vs[i][0], yi = vs[i][1];
+            let xj = vs[j][0], yj = vs[j][1];
+            let intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
     checkBallStatus() {
-        if (!this.ball || !this.Ammo) return 'FAIRWAY';
+        if (!this.ball || !this.Ammo) return { type: this.AreaType.FAIRWAY };
         const Ammo = this.Ammo;
+        const ms = this.ball.getMotionState();
+        if (!ms) return { type: this.AreaType.FAIRWAY };
 
         const transform = new Ammo.btTransform();
-        this.ball.getMotionState().getWorldTransform(transform);
+        ms.getWorldTransform(transform);
         const origin = transform.getOrigin();
         const px = origin.x();
         const pz = origin.z();
 
-        // 1. OB 체크 (범위 밖)
-        if (Math.abs(px) > 160 || pz < -600 || pz > 100) {
-            return 'OB';
-        }
-
-        // 2. 지형 판정
-        for (const terrain of this.terrains) {
-            const b = terrain.bounds;
-            if (px >= b.xMin && px <= b.xMax && pz >= b.zMin && pz <= b.zMax) {
-                return terrain.type;
+        // 1. Check Course Areas (Priority: OB > Hazard > Green)
+        for (const area of this.courseAreas) {
+            if (this.isPointInPolygon([px, pz], area.polygon)) {
+                return area;
             }
         }
 
-        return 'FAIRWAY'; // 기본값
+        // 2. Legacy/Simple Bounds checks for Fairway/Rough
+        if (Math.abs(px) < 30) {
+            return { type: this.AreaType.FAIRWAY, friction: 0.5, restitution: 0.3 };
+        }
+        return { type: this.AreaType.ROUGH, friction: 1.2, restitution: 0.1 };
     }
 
     update(dt) {
@@ -142,19 +218,33 @@ export class PhysicsEngine {
             this.world.stepSimulation(dt, 10);
 
             // 실시간 상태 체크 및 물리 속성 반영
-            const status = this.checkBallStatus();
-            if (this.ball && this.TERRAIN_TYPES[status]) {
-                const props = this.TERRAIN_TYPES[status];
-                this.ball.setFriction(props.friction);
-                this.ball.setRestitution(props.restitution);
+            const statusData = this.checkBallStatus();
 
-                // 벙커나 물에서는 속도 급감
-                if (status === 'BUNKER' || status === 'WATER') {
-                    const vel = this.ball.getLinearVelocity();
-                    vel.multiplyScalar(0.9); // 강한 감쇠
-                    this.ball.setLinearVelocity(vel);
-                }
+            // Apply Physics Properties found in Area Data
+            if (statusData.friction !== undefined) this.ball.setFriction(statusData.friction);
+            if (statusData.restitution !== undefined) this.ball.setRestitution(statusData.restitution);
+
+            // 특수 지형 감속 로직
+            const type = statusData.type;
+            if (type === this.AreaType.BUNKER || type === this.AreaType.PENALTY_WATER) {
+                const vel = this.ball.getLinearVelocity();
+                vel.multiplyScalar(0.9); // 강한 감쇠
+                this.ball.setLinearVelocity(vel);
+            } else if (type === this.AreaType.GREEN) {
+                // 그린 위에서는 구름 마찰(Rolling Friction) 중요 & 경사
+                this.updatePuttingPhysics(dt);
             }
+        }
+    }
+
+    updatePuttingPhysics(dt) {
+        // 그린 경사 및 미세 감속 시뮬레이션
+        // 단순 구현: 약간의 불규칙성(Roughness 0.45 시각적 대응)
+        const vel = this.ball.getLinearVelocity();
+        // 속도가 아주 느릴 때 멈춤 처리 강화
+        if (vel.length() < 0.1) {
+            vel.setX(0); vel.setY(0); vel.setZ(0);
+            this.ball.setLinearVelocity(vel);
         }
     }
 
@@ -197,6 +287,23 @@ export class PhysicsEngine {
         this.ball.setLinearVelocity(new Ammo.btVector3(velocity.x, velocity.y, velocity.z));
         this.ball.setAngularVelocity(new Ammo.btVector3(spin.x, spin.y, spin.z)); // 스핀 반영
         this.spin = new Ammo.btVector3(spin.x, spin.y, spin.z);
+        this.ball.activate();
+    }
+
+    resetBall(pos = { x: 0, y: 0.042, z: 0 }) {
+        if (!this.ball || !this.Ammo) return;
+        const Ammo = this.Ammo;
+        const transform = new Ammo.btTransform();
+        transform.setIdentity();
+        transform.setOrigin(new Ammo.btVector3(pos.x, pos.y, pos.z));
+
+        let ms = this.ball.getMotionState();
+        if (ms) ms.setWorldTransform(transform);
+        this.ball.setWorldTransform(transform);
+
+        this.ball.setLinearVelocity(new Ammo.btVector3(0, 0, 0));
+        this.ball.setAngularVelocity(new Ammo.btVector3(0, 0, 0));
+        this.ball.clearForces();
         this.ball.activate();
     }
 }

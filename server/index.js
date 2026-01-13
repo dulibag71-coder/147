@@ -41,6 +41,12 @@ app.get('/api/health', (req, res) => {
 app.post('/api/auth/register', register);
 app.post('/api/auth/login', login);
 
+// QR Login Session Routes
+import { createSession, checkSession, connectSession } from './controllers/sessionController.js';
+app.get('/api/auth/session/create', createSession);
+app.get('/api/auth/session/check', checkSession);
+app.post('/api/auth/session/connect', authenticateToken, connectSession);
+
 // Game Configuration (Server-side decision for items/settings)
 app.get('/api/game/config', (req, res) => {
     const userId = req.query.userId || 1; // 실제로는 JWT에서 추출

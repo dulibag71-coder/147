@@ -13,6 +13,7 @@
         crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
     <script src="https://kripken.github.io/ammo.js/builds/ammo.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
     <link rel="stylesheet" href="./src/style.css">
 </head>
@@ -164,9 +165,11 @@
                 <h1 style="color:#00c853; margin-bottom:10px;">GOLF UNIVERSE</h1>
                 <p style="color:#666; margin-bottom:30px;">모바일 앱의 QR 스캐너를 이용하거나<br>아래 코드를 입력해주세요.</p>
 
-                <div style="background:#f8f9fa; padding:20px; border-radius:15px; margin-bottom:20px;">
-                    <div style="font-size:40px; margin-bottom:10px;">📱</div>
-                    <div style="font-size:24px; font-weight:bold; letter-spacing:5px; color:#333;">73 42 19</div>
+                <div
+                    style="background:#f8f9fa; padding:20px; border-radius:15px; margin-bottom:20px; display:flex; flex-direction:column; align-items:center;">
+                    <div id="qr-code-container" style="background:white; padding:10px; margin-bottom:10px;"></div>
+                    <div id="session-code-text"
+                        style="font-size:24px; font-weight:bold; letter-spacing:5px; color:#333;">LOADING...</div>
                 </div>
 
                 <div style="padding:15px; background:#f0f0f0; border-radius:10px; color:#666; font-size:14px;">

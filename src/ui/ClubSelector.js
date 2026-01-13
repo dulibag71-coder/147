@@ -30,6 +30,24 @@ export class ClubSelector {
         this.updateUI();
     }
 
+    setClub(id) {
+        // Map Mobile App Club IDs to Internal IDs
+        const map = {
+            'DRIVER': 'DR',
+            'IRON_5': 'I5',
+            'IRON_7': 'I7',
+            'WEDGE': 'PW',
+            'PUTTER': 'PT'
+        };
+        const targetId = map[id] || id; // Use mapped if exists, else raw
+
+        const index = this.clubs.findIndex(c => c.id === targetId);
+        if (index !== -1) {
+            this.currentIndex = index;
+            this.updateUI();
+        }
+    }
+
     updateUI() {
         const current = this.clubs[this.currentIndex];
         const prev = this.clubs[(this.currentIndex - 1 + this.clubs.length) % this.clubs.length];

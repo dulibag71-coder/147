@@ -125,38 +125,191 @@ class AirSwingApp {
         console.log('샷 감지!', data);
         this.shotStartTime = performance.now();
         this.setGameState('flight');
-        this.physics.setInitialShot(data.velocity, data.spin);
+
+        // 1. Aim Rotation 적용
+        const aimAngle = this.scene.aimAngle || 0;
+        const v = data.velocity;
+
+        // Rotate Vector (Rotate X/Z plane around Y axis)
+        // Sensor Coordinate: X (Right), Y (Up), Z (Forward/Depth)
+        // Aim Rotation: +Angle = CCW (Left)
+
+        const cos = Math.cos(aimAngle);
+        const sin = Math.sin(aimAngle);
+
+        // New Velocity (Z is forward negative? No, usually forward)
+        // Assuming Physics Engine uses standard Z-forward or Z-negative checks.
+        // PhysicsEngine uses (x, y, z).
+
+        const rVx = v.x * cos - v.z * sin;
+        const rVz = v.x * sin + v.z * cos;
+
+        const finalVel = { x: rVx, y: v.y, z: rVz };
+
+        this.physics.setInitialShot(finalVel, data.spin);
         this.audio.playEffect('hit');
-        this.lastShotVelocity = data.velocity;
+        this.lastShotVelocity = finalVel;
     }
 
     handleShotComplete(distance) {
-        this.setGameState('ready'); // 다시 대기 상태로
-        this.vision.resetState();   // 다음 샷을 위해 비전 상태 리셋
+        const statusData = this.physics.checkBallStatus();
+        const type = statusData.type;
+        const AreaType = this.physics.AreaType;
+
+        this.score += 1; // Count the stroke just made
+
+        console.log(`Shot Result: Terrain=${type}, Distance=${distance.toFixed(1)}m`);
+
+        // 1. OB Rules
+        if (type === AreaType.OB) {
+            this.ui.showNotification('⚠️ OB! 1벌타 부여 및 원위치');
+            this.score += 1; // Penalty Stroke
+            this.audio.announceShot('ob');
+
+            // Reset to Tee or Previous (Simply Tee for now as "Reset")
+            this.scene.initBall();
+            this.physics.resetBall({ x: 0, y: 0.042, z: 0 });
+            this.setGameState('ready');
+            return;
+        }
+
+        // 2. Penalty Area (Water/Lateral) Rules
+        if (type === AreaType.PENALTY_WATER || type === AreaType.PENALTY_LATERAL) {
+            this.ui.showNotification('💦 해저드! 1벌타 (드롭존 이동)');
+            this.score += 1; // Penalty Stroke
+            this.audio.announceShot('hazard');
+
+            // Move to Mock Drop Zone (Near Water Hazard)
+            this.scene.updateBall({ x: 0, y: 0.1, z: -290 }, { x: 0, y: 0, z: 0, w: 1 });
+            this.physics.resetBall({ x: 0, y: 0.1, z: -290 });
+            this.setGameState('ready');
+            return;
+        }
+
+        // 3. Green Rules (Putting)
+        if (type === AreaType.GREEN) {
+            this.ui.showNotification('⛳ 그린 온! 퍼팅 모드 전환');
+            this.setGameState('putting');
+            this.scene.enterPuttingMode();
+            return;
+        }
+
+        // 4. Normal Play (Fairway/Rough)
+        this.handleNormalPlayEnd(distance, type);
+    }
+
+    handleNormalPlayEnd(distance, type) {
+        this.setGameState('ready');
+        this.vision.resetState();
 
         // 모바일 앱으로 결과 전송
         const shotData = {
             distance: distance,
             ballSpeed: Math.sqrt(this.lastShotVelocity.x ** 2 + this.lastShotVelocity.y ** 2 + this.lastShotVelocity.z ** 2),
             launchAngle: Math.atan2(this.lastShotVelocity.y, this.lastShotVelocity.z) * (180 / Math.PI),
-            rewardCoins: Math.floor(distance * 10), // 거리당 10코인 보상
+            rewardCoins: Math.floor(distance * 10),
+            score: this.score, // Send current score
             timestamp: Date.now()
         };
 
-        console.log('샷 완료! 데이터 동기화 중...', shotData);
         this.sync.updateGameState({
             lastShot: shotData,
-            totalRounds: 1 // 임시
+            totalRounds: 1
         });
 
-        this.ui.showNotification(`샷 완료! 비거리: ${distance.toFixed(1)}m (+${shotData.rewardCoins} G)`);
+        this.ui.showNotification(`샷 완료! 비거리: ${distance.toFixed(1)}m (현재 스코어: ${this.score})`);
+    }
+
+    checkHoleIn() {
+        if (this.state !== 'putting' || !this.physics.ball) return;
+
+        const ballPos = this.physics.ball.getMotionState().getWorldTransform(new Ammo.btTransform()).getOrigin();
+        // Hole at (0, 0, -525)
+        const dx = ballPos.x();
+        const dz = ballPos.z() + 525; // Relative to hole Z
+        const dist = Math.sqrt(dx * dx + dz * dz);
+
+        // Cup Radius ~0.108m / 2 = 0.054m. 
+        // Logic: low speed + close distance = In
+        const vel = this.physics.ball.getLinearVelocity();
+        const speed = vel.length();
+
+        if (dist < 0.1 && speed < 1.0) {
+            // "Suck In" (Magnet effect)
+            const forceX = -dx * 10;
+            const forceZ = -dz * 10;
+            this.physics.ball.applyCentralForce(new Ammo.btVector3(forceX, 0, forceZ));
+
+            if (dist < 0.03) {
+                this.handleHoleIn();
+            }
+        }
+    }
+
+    handleHoleIn() {
+        this.ui.showNotification(`🎉 홀인! (총 ${this.score}타)`);
+        this.audio.playEffect('powerup'); // Clapping?
+        this.setGameState('result');
     }
 
     onInitComplete() {
         if (this.state !== 'loading') return;
         this.ui.hideLoader();
-        this.state = 'waiting_login'; // 로그인 대기 상태
+        this.state = 'waiting_login';
+        this.initLoginSession(); // QR 세션 시작
         this.startLoop();
+    }
+
+    async initLoginSession() {
+        try {
+            const res = await fetch('/api/auth/session/create');
+            const data = await res.json();
+            const sessionId = data.sessionId;
+
+            // Render QR
+            const container = document.getElementById('qr-code-container');
+            const text = document.getElementById('session-code-text');
+            if (container && text) {
+                container.innerHTML = '';
+                new QRCode(container, {
+                    text: sessionId,
+                    width: 128,
+                    height: 128
+                });
+                text.innerText = sessionId;
+            }
+
+            this.pollSessionStatus(sessionId);
+        } catch (e) {
+            console.error('Session Create Failed:', e);
+            document.getElementById('session-code-text').innerText = 'ERROR';
+        }
+    }
+
+    async pollSessionStatus(sessionId) {
+        if (this.state !== 'waiting_login') return;
+
+        try {
+            const res = await fetch(`/api/auth/session/check?sessionId=${sessionId}`);
+            const data = await res.json();
+
+            if (data.status === 'connected') {
+                this.userId = data.userId;
+                this.sync.userId = data.userId; // Sync 모듈에도 ID 전달
+                this.ui.showNotification('모바일 앱과 연결되었습니다! 🔗');
+                // 장착 아이템 등 로드
+                this.sync.loadGameConfig();
+
+                // 로그인 오버레이 숨김 및 게임 시작
+                document.getElementById('login-overlay').style.display = 'none';
+                this.setGameState('address');
+            } else {
+                setTimeout(() => this.pollSessionStatus(sessionId), 2000); // 2초 주기 폴링
+            }
+        } catch (e) {
+            console.error('Session Poll Error:', e);
+            setTimeout(() => this.pollSessionStatus(sessionId), 5000);
+        }
     }
 
     setGameState(newState) {
@@ -223,6 +376,14 @@ class AirSwingApp {
             this.setGameState('address');
             this.scene.initBall(); // 공 리셋
             this.physics.resetBall(); // 물리 리셋
+            this.ui.showNotification('멀리건 사용됨! (다시 치세요)');
+        } else if (data.command === 'camera') {
+            this.scene.setCameraMode(data.mode);
+        } else if (data.command === 'aim') {
+            this.scene.rotateAim(data.dir);
+        } else if (data.command === 'club') {
+            this.clubs.setClub(data.value);
+            this.ui.showNotification(`클럽 변경: ${data.value}`);
         }
     }
 
@@ -270,6 +431,7 @@ class AirSwingApp {
             // 1. 물리 시뮬레이션 (공이 움직이는 상태일 때만)
             if (this.state === 'flight' || this.state === 'putting') {
                 this.physics.update(dt);
+                this.checkHoleIn(); // Check if ball enters hole
 
                 // 공의 물리 상태를 렌더링 엔진으로 동기화
                 if (this.physics.ball) {

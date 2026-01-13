@@ -131,36 +131,140 @@ export class SceneManager {
     }
 
     initEnvironment() {
-        // 배경: 고품질 스카이 박스 대체용 시각적 보정
         this.scene.background = new THREE.Color(0x87ceeb);
 
-        // 1. 기본 지면: 러프 (Rough)
-        this.createTerrainArea(-200, 200, -600, 100, 0x1e5631, 'ROUGH');
+        // 1. Base Terrain (Rough) - Infinite Plane feel
+        this.createTerrainArea(-500, 500, -800, 200, 0x1e5631, 'ROUGH');
 
-        // 2. 페어웨이 (Fairway)
-        this.createTerrainArea(-30, 30, -500, -40, 0x27ae60, 'FAIRWAY');
+        // 2. Render Polygons (Matching PhysicsEngine Data)
+        this.renderPolygonArea([[-200, -600], [-160, -600], [-160, 100], [-200, 100]], 0xff0000, 'OB'); // Left OB
+        this.renderPolygonArea([[160, -600], [200, -600], [200, 100], [160, 100]], 0xff0000, 'OB'); // Right OB
+        this.renderPolygonArea([[-80, -350], [80, -350], [80, -300], [-80, -300]], 0x3498db, 'WATER'); // Water Hazard
 
-        // 3. 그린 (Green)
-        this.createTerrainArea(-20, 20, -550, -500, 0x2ecc71, 'GREEN');
+        // 3. Green 
+        this.renderPolygonArea([[-20, -550], [20, -550], [20, -500], [-20, -500]], 0x2ecc71, 'GREEN');
 
-        // 4. 해저드 (Water)
-        this.createTerrainArea(-80, 80, -350, -300, 0x3498db, 'WATER');
+        // 4. Bunkers
+        // Left Green-side
+        this.renderPolygonArea([[-35, -530], [-22, -530], [-22, -510], [-35, -510]], 0xe3c18d, 'BUNKER');
+        // Right Green-side
+        this.renderPolygonArea([[22, -540], [35, -540], [35, -520], [22, -520]], 0xe3c18d, 'BUNKER');
+        // Fairway Bunker
+        this.renderPolygonArea([[15, -250], [35, -250], [35, -210], [15, -210]], 0xe3c18d, 'BUNKER');
 
-        // 5. 벙커 (Bunker)
-        this.createTerrainArea(20, 35, -200, -160, 0xe3c18d, 'BUNKER');
-        this.createTerrainArea(-35, -20, -400, -360, 0xe3c18d, 'BUNKER');
+        // 5. Fairway (Complex Polygon)
+        this.renderPolygonArea([
+            [-30, -500], [30, -500],
+            [40, -300], [-40, -300],
+            [-20, -40], [20, -40]
+        ], 0x27ae60, 'FAIRWAY');
 
-        // 6. OB 구역 (경고 빨간선 효과)
-        this.createTerrainArea(-160, -150, -600, 100, 0xff0000, 'OB');
-        this.createTerrainArea(150, 160, -600, 100, 0xff0000, 'OB');
-
-        // 6. OB 구역 표시 (빨간 말뚝 대신 붉은 바닥 경계)
-        this.createTerrainArea(-155, -150, -500, 50, 0xff0000, 'OB');
-        this.createTerrainArea(150, 155, -500, 50, 0xff0000, 'OB');
-
-        // 초기 카메라 위치
+        // Initial Camera
         this.camera.position.set(0, 1.8, 8);
         this.camera.lookAt(0, 0.8, -50);
+
+        this.slopeOverlay = null;
+    }
+
+    renderPolygonArea(points, color, type) {
+        const shape = new THREE.Shape();
+        shape.moveTo(points[0][0], points[0][1]);
+        for (let i = 1; i < points.length; i++) {
+            shape.lineTo(points[i][0], points[i][1]);
+        }
+        shape.closePath();
+
+        const geometry = new THREE.ShapeGeometry(shape);
+        // Rotate to lie on ground (geometry is X-Y, we need X-Z)
+        geometry.rotateX(-Math.PI / 2);
+
+        let material;
+        if (type === 'GREEN') {
+            material = new THREE.MeshStandardMaterial({
+                color: color, roughness: 0.45, metalness: 0,
+            });
+        } else if (type === 'WATER') {
+            material = new THREE.MeshStandardMaterial({
+                color: color, roughness: 0.1, metalness: 0.8,
+                transparent: true, opacity: 0.8
+            });
+        } else if (type === 'BUNKER') {
+            // Sand Texture feel
+            material = new THREE.MeshStandardMaterial({
+                color: color, roughness: 1.0, metalness: 0.0
+            });
+            geometry.translate(0, -0.05, 0); // Slightly Depressed
+        } else if (type === 'OB') {
+            material = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.3 });
+            geometry.translate(0, 0.05, 0);
+        } else if (type === 'FAIRWAY') {
+            material = new THREE.MeshStandardMaterial({
+                color: color, roughness: 0.8, metalness: 0.0
+            });
+        } else {
+            material = new THREE.MeshStandardMaterial({ color: color, roughness: 0.9 });
+        }
+
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.y = 0.02;
+
+        // Fairway logic to avoid z-fighting with rough, but stay below Green
+        if (type === 'FAIRWAY') mesh.position.y = 0.03;
+        if (type === 'GREEN') mesh.position.y = 0.04;
+
+        mesh.receiveShadow = true;
+        this.scene.add(mesh);
+
+        // Add visual cues (Stakes for OB/Hazard)
+        if (type === 'OB' || type === 'WATER') {
+            this.addStakes(points, type === 'OB' ? 0xffffff : 0xff0000);
+        }
+    }
+
+    addStakes(points, color) {
+        // Simple stakes along the perimeter
+        const stakeGeo = new THREE.CylinderGeometry(0.05, 0.05, 1, 8);
+        const stakeMat = new THREE.MeshStandardMaterial({ color: color });
+
+        for (let i = 0; i < points.length; i++) {
+            const stake = new THREE.Mesh(stakeGeo, stakeMat);
+            stake.position.set(points[i][0], 0.5, points[i][1]);
+            this.scene.add(stake);
+        }
+    }
+
+    enterPuttingMode() {
+        // Camera setup for putting
+        // 낮고, 홀을 바라보는 뷰
+        if (!this.ballMesh) return;
+        const ballPos = this.ballMesh.position;
+
+        // 홀 위치 (가정: -525 정도가 그린 중앙)
+        const holePos = new THREE.Vector3(0, 0, -525);
+
+        // 카메라: 공 뒤 1m, 높이 0.3m
+        this.camera.position.set(ballPos.x, 0.4, ballPos.z + 1.5);
+        this.camera.lookAt(holePos.x, 0, holePos.z);
+
+        this.showSlopeOverlay(true, ballPos);
+    }
+
+    showSlopeOverlay(visible, centerPos) {
+        if (!visible) {
+            if (this.slopeOverlay) this.scene.remove(this.slopeOverlay);
+            return;
+        }
+
+        // Simple Grid Overlay showing slope
+        // Create a grid texture or simple arrow sprites
+        // For efficiency, let's create a GridHelper specialized for putting
+        const size = 10;
+        const divisions = 20;
+        this.slopeOverlay = new THREE.GridHelper(size, divisions, 0xffff00, 0x00ff00); // Yellow/Green grid
+        this.slopeOverlay.position.set(centerPos.x, 0.05, centerPos.z);
+        this.slopeOverlay.material.transparent = true;
+        this.slopeOverlay.material.opacity = 0.3;
+        this.scene.add(this.slopeOverlay);
     }
 
     createTerrainArea(xMin, xMax, zMin, zMax, color, type) {
@@ -320,8 +424,49 @@ export class SceneManager {
         if (mode === 'tee') {
             this.camera.position.set(0, 1.8, 8);
             this.camera.lookAt(0, 0.8, -50);
+            this.aimAngle = 0; // Reset aim on reset
         } else if (mode === 'follow') {
             // Ball follow logic to be added
+        } else if (mode === 'top') {
+            this.camera.position.set(0, 200, 0);
+            this.camera.lookAt(0, 0, -200);
         }
+    }
+
+    rotateAim(dir) {
+        if (this.app.state !== 'address' && this.app.state !== 'ready') return;
+
+        const step = 0.1; // Radians (~5.7 degrees)
+        this.aimAngle = (this.aimAngle || 0) + (dir === 'left' ? step : -step);
+
+        // Rotate Camera around Origin (0,0,0)
+        // Simple approach: Rotate position and lookAt target
+        // Default Pos: (0, 1.8, 8), LookAt: (0, 0.8, -50)
+
+        const dist = 8;
+        const x = Math.sin(this.aimAngle) * dist;
+        const z = Math.cos(this.aimAngle) * dist;
+
+        this.camera.position.set(x, 1.8, z);
+        this.camera.lookAt(0, 0.8, 0); // Look at ball/tee
+        this.camera.rotation.y += Math.PI; // Adjust orientation
+
+        // Better: Rotate the entire Scene container or just camera orbit?
+        // Let's rotate the Camera orbit. 
+        // Actually, for aiming, we usually rotate the World so the target lines up with Straight.
+        // But here, let's rotate Camera to look at different direction.
+
+        // Recalculate 'Forward' vector
+        const lookDir = new THREE.Vector3(0, 0, -1);
+        lookDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.aimAngle);
+
+        const camPos = new THREE.Vector3(0, 1.8, 0).sub(lookDir.clone().multiplyScalar(8));
+        const target = new THREE.Vector3(0, 0.8, 0).add(lookDir.clone().multiplyScalar(50));
+
+        this.camera.position.copy(camPos);
+        this.camera.lookAt(target);
+
+        // Show indicator?
+        console.log(`Aim Angle: ${this.aimAngle} rad`);
     }
 }

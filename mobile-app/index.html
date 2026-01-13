@@ -263,6 +263,7 @@
 
     <!-- Home Page -->
     <div id="page-home" class="page active">
+        <!-- ... (Keep existing Home content) ... -->
         <div class="search-login">
             <input type="text" placeholder="화면의 번호를 입력해주세요">
             <button>스크린로그인</button>
@@ -274,6 +275,7 @@
             <div class="nav-item" onclick="showPage('page-shop')">🏪 스토어</div>
         </div>
 
+        <!-- ... (Existing Card Container) ... -->
         <div class="card-container" id="home-round-container">
             <!-- Latest Round Card (Dynamic) -->
             <div id="home-round-card" class="round-card" style="display:none;">
@@ -294,7 +296,7 @@
                 <button onclick="showPage('page-nasmo')">나스모</button>
             </div>
         </div>
-
+        <!-- ... (Rest of Home) ... -->
         <div class="gift-section">
             <div class="gift-header">
                 <span>➕ 친구에게 선물 어때요?</span>
@@ -327,6 +329,71 @@
                         <div id="val-launch" style="font-size:18px; font-weight:bold;">0.0 °</div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Booking Page -->
+    <div id="page-booking" class="page">
+        <h2 style="padding:20px; margin:0;">매장 예약</h2>
+        <div class="card-container">
+            <div style="background:white; padding:20px; border-radius:15px;">
+                <h3>⛳ 오션뷰 CC 예약</h3>
+                <input type="date"
+                    style="width:100%; padding:10px; margin-bottom:10px; border:1px solid #ddd; border-radius:5px;">
+                <input type="time"
+                    style="width:100%; padding:10px; margin-bottom:10px; border:1px solid #ddd; border-radius:5px;">
+                <select style="width:100%; padding:10px; margin-bottom:20px; border:1px solid #ddd; border-radius:5px;">
+                    <option>인원 1명</option>
+                    <option>인원 2명</option>
+                    <option>인원 3명</option>
+                    <option>인원 4명</option>
+                </select>
+                <button onclick="alert('예약이 접수되었습니다!')"
+                    style="width:100%; padding:15px; background:var(--primary); color:white; border:none; border-radius:10px; font-weight:bold;">예약하기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ranking Page -->
+    <div id="page-ranking" class="page">
+        <h2 style="padding:20px; margin:0;">시즌 랭킹 (Global)</h2>
+        <div class="card-container">
+            <div id="ranking-list" style="background:white; border-radius:15px; overflow:hidden;">
+                <!-- Dynamic Content -->
+            </div>
+            <div id="ranking-empty" style="text-align:center; padding:30px; color:#999; display:none;">
+                랭킹 데이터를 불러오는 중...
+            </div>
+        </div>
+    </div>
+
+    <!-- Shop Page -->
+    <div id="page-shop" class="page">
+        <h2 style="padding:20px; margin:0;">프로샵 (Pro Shop)</h2>
+        <div class="card-container" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div style="background:white; padding:15px; border-radius:15px; text-align:center;">
+                <div style="font-size:40px;">⚪</div>
+                <h4>Standard Ball</h4>
+                <p style="color:#999; font-size:12px;">기본 성능 2피스</p>
+                <button onclick="buyItem('standard_ball', 0)"
+                    style="width:100%; padding:8px; background:#ddd; border:none; border-radius:5px;">장착 (무료)</button>
+            </div>
+            <div style="background:white; padding:15px; border-radius:15px; text-align:center;">
+                <div style="font-size:40px;">🎱</div>
+                <h4>Pro V1 Style</h4>
+                <p style="color:#f08c00; font-size:12px;">비거리 +5%</p>
+                <button onclick="buyItem('pro_ball', 1000)"
+                    style="width:100%; padding:8px; background:var(--primary); color:white; border:none; border-radius:5px;">구매
+                    (1,000G)</button>
+            </div>
+            <div style="background:white; padding:15px; border-radius:15px; text-align:center;">
+                <div style="font-size:40px;">🟡</div>
+                <h4>Golden Ball</h4>
+                <p style="color:#f08c00; font-size:12px;">비거리 +15%</p>
+                <button onclick="buyItem('premium_ball', 5000)"
+                    style="width:100%; padding:8px; background:var(--gold); color:white; border:none; border-radius:5px;">구매
+                    (5,000G)</button>
             </div>
         </div>
     </div>
@@ -370,65 +437,77 @@
         </div>
     </div>
 
-    <!-- Remote Controller Tab (Always visible float button or special page) -->
+    <!-- Remote Controller Tab -->
     <div id="page-remote" class="page">
         <div class="header" style="background:var(--primary); color:white; padding:20px; text-align:center;">
             <h1 style="margin:0; font-size:24px; letter-spacing:1px;">GOLF UNIVERSE</h1>
             <p style="margin:5px 0 0 0; font-size:12px; opacity:0.8;">Remote Controller</p>
         </div>
+
         <div class="card-container">
-            <h3 style="margin:0 0 10px 0; font-size:16px;">🎮 리모컨 & 환경설정</h3>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <!-- 1. Game Actions -->
+            <h3 style="margin:0 0 10px 0; font-size:16px;">🎮 게임 조작</h3>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;">
                 <button id="btn-mulligan"
                     style="padding:15px; background:#fff; border:1px solid #ddd; border-radius:10px;">↺ 멀리건</button>
                 <button id="btn-god-mode"
                     style="padding:15px; background:linear-gradient(45deg, #FFD700, #FFA500); border:none; border-radius:10px; color:white; font-weight:bold;">⚡
                     GOD MODE</button>
-                <button id="btn-cam-follow"
-                    style="padding:15px; background:#e3f2fd; border:none; border-radius:10px; color:#005696;">🎥
-                    팔로우캠</button>
-                <button id="btn-cam-top"
-                    style="padding:15px; background:#e3f2fd; border:none; border-radius:10px; color:#005696;">🎥
-                    탑뷰</button>
             </div>
-        </div>
-    </div>
 
-    <!-- QR Login Float Button -->
-    <div id="qr-scan-btn"
-        style="position:fixed; bottom:80px; right:20px; width:60px; height:60px; background:var(--gold); border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:100; cursor:pointer;">
-        <span style="font-size:30px;">📷</span>
-    </div>
-    <div class="card-container">
-        <h3 style="margin:0 0 10px 0; font-size:16px;">🎮 리모컨 & 환경설정</h3>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-            <button id="btn-mulligan"
-                style="padding:15px; background:#fff; border:1px solid #ddd; border-radius:10px;">↺ 멀리건</button>
-            <button id="btn-god-mode"
-                style="padding:15px; background:linear-gradient(45deg, #FFD700, #FFA500); border:none; border-radius:10px; color:white; font-weight:bold;">⚡
-                GOD MODE</button>
-            <button id="btn-cam-follow"
-                style="padding:15px; background:#e3f2fd; border:none; border-radius:10px; color:#005696;">🎥
-                팔로우캠</button>
-            <button id="btn-cam-top"
-                style="padding:15px; background:#e3f2fd; border:none; border-radius:10px; color:#005696;">🎥 탑뷰</button>
-        </div>
-
-        <div style="margin-top:20px; background:white; padding:15px; border-radius:10px;">
-            <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-                <span>🌬️ 바람 세기</span>
-                <span id="wind-val">5.0 m/s</span>
+            <!-- 2. Aiming & Camera -->
+            <h3 style="margin:0 0 10px 0; font-size:16px;">🎯 에이밍 & 카메라</h3>
+            <div style="display:flex; gap:10px; margin-bottom:20px;">
+                <button id="btn-aim-left"
+                    style="flex:1; padding:15px; background:#e3f2fd; border:none; border-radius:10px; color:#005696; font-size:20px;">⬅️
+                    좌측</button>
+                <div style="display:flex; flex-direction:column; gap:5px; flex:1;">
+                    <button id="btn-cam-follow"
+                        style="flex:1; background:#e3f2fd; border:none; border-radius:10px; color:#005696;">🎥
+                        팔로우</button>
+                    <button id="btn-cam-top"
+                        style="flex:1; background:#e3f2fd; border:none; border-radius:10px; color:#005696;">🎥
+                        탑뷰</button>
+                </div>
+                <button id="btn-aim-right"
+                    style="flex:1; padding:15px; background:#e3f2fd; border:none; border-radius:10px; color:#005696; font-size:20px;">우측
+                    ➡️</button>
             </div>
-            <input type="range" id="wind-slider" min="0" max="20" value="5" style="width:100%;">
 
-            <div style="margin-top:15px;">
-                <span>🗣️ 캐디 목소리</span>
-                <select id="caddy-voice-select"
-                    style="width:100%; padding:10px; margin-top:5px; border:1px solid #ddd; border-radius:5px;">
-                    <option value="korean_female">👩 친절한 한국어 (기본)</option>
-                    <option value="english_male">👨 전문적인 영어</option>
-                    <option value="fun_mode">🤣 예능 모드</option>
-                </select>
+            <!-- 3. Club Selection -->
+            <h3 style="margin:0 0 10px 0; font-size:16px;">�️‍♂️ 클럽 선택</h3>
+            <div style="display:flex; gap:5px; overflow-x:auto; padding-bottom:10px; margin-bottom:20px;">
+                <button class="btn-club" data-club="DRIVER"
+                    style="padding:10px 20px; border-radius:20px; border:1px solid #ddd; background:white; white-space:nowrap;">드라이버</button>
+                <button class="btn-club" data-club="IRON_5"
+                    style="padding:10px 20px; border-radius:20px; border:1px solid #ddd; background:white; white-space:nowrap;">5번
+                    아이언</button>
+                <button class="btn-club" data-club="IRON_7"
+                    style="padding:10px 20px; border-radius:20px; border:1px solid #ddd; background:white; white-space:nowrap;">7번
+                    아이언</button>
+                <button class="btn-club" data-club="WEDGE"
+                    style="padding:10px 20px; border-radius:20px; border:1px solid #ddd; background:white; white-space:nowrap;">웨지</button>
+                <button class="btn-club" data-club="PUTTER"
+                    style="padding:10px 20px; border-radius:20px; border:1px solid #ddd; background:white; white-space:nowrap;">퍼터</button>
+            </div>
+
+            <!-- 4. Environment -->
+            <div style="background:white; padding:15px; border-radius:10px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                    <span>🌬️ 바람 세기</span>
+                    <span id="wind-val">5.0 m/s</span>
+                </div>
+                <input type="range" id="wind-slider" min="0" max="20" value="5" style="width:100%;">
+
+                <div style="margin-top:15px;">
+                    <span>🗣️ 캐디 목소리</span>
+                    <select id="caddy-voice-select"
+                        style="width:100%; padding:10px; margin-top:5px; border:1px solid #ddd; border-radius:5px;">
+                        <option value="korean_female">👩 친절한 한국어 (기본)</option>
+                        <option value="english_male">👨 전문적인 영어</option>
+                        <option value="fun_mode">🤣 예능 모드</option>
+                    </select>
+                </div>
             </div>
         </div>
     </div>

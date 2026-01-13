@@ -121,6 +121,22 @@ class MobileApp {
         this.bindClick('btn-cam-follow', () => this.sendAction('REMOTE', { command: 'camera', mode: 'follow' }));
         this.bindClick('btn-cam-top', () => this.sendAction('REMOTE', { command: 'camera', mode: 'top' }));
 
+        // 추가: 에이밍
+        this.bindClick('btn-aim-left', () => this.sendAction('REMOTE', { command: 'aim', dir: 'left' }));
+        this.bindClick('btn-aim-right', () => this.sendAction('REMOTE', { command: 'aim', dir: 'right' }));
+
+        // 추가: 클럽 선택 (이벤트 위임)
+        document.body.addEventListener('click', (e) => {
+            if (e.target.classList.contains('btn-club')) {
+                const club = e.target.getAttribute('data-club');
+                this.sendAction('REMOTE', { command: 'club', value: club });
+
+                // UI Highlight logic
+                document.querySelectorAll('.btn-club').forEach(b => b.style.background = 'white');
+                e.target.style.background = '#e3f2fd';
+            }
+        });
+
         // 추가: 환경 설정 리스너
         const windSlider = document.getElementById('wind-slider');
         if (windSlider) {
@@ -138,24 +154,48 @@ class MobileApp {
             });
         }
 
-        // QR Login
+        // QR Login (Real Session ID Flow)
         this.bindClick('qr-scan-btn', async () => {
-            alert('📷 QR 스캔 중...');
-            // 실제로는 QR에 포함된 세션ID 등을 사용하겠지만, 여기서는 유저 인증 시뮬레이션
-            try {
-                const res = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: 'user@example.com', password: 'password123' })
-                });
-                const data = await res.json();
-                this.token = data.token;
-                localStorage.setItem('auth_token', this.token);
+            // Simulator: Prompt for code displayed on PC
+            const sessionId = prompt("PC 화면에 표시된 6자리 세션 코드를 입력하세요:");
+            if (!sessionId) return;
 
-                this.sendAction('QR_LOGIN', { userId: 'GOLFER_PRO', id: 1, timestamp: Date.now() });
-                alert('✅ 로그인 성공! PC와 연결되었습니다.');
+            try {
+                // 1. Ensure Logged In on Mobile first (Simulated by existing login call if no token)
+                let token = this.token || localStorage.getItem('auth_token');
+
+                if (!token) {
+                    // Auto-login for demo purposes if not logged in
+                    const res = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: 'user@example.com', password: 'password123' })
+                    });
+                    const data = await res.json();
+                    token = data.token;
+                    this.token = token;
+                    localStorage.setItem('auth_token', token);
+                }
+
+                // 2. Connect Session
+                const res = await fetch('/api/auth/session/connect', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ sessionId: sessionId.toUpperCase() })
+                });
+
+                if (res.ok) {
+                    alert(`✅ PC와 연결되었습니다!\n세션 ID: ${sessionId}`);
+                } else {
+                    const err = await res.json();
+                    alert(`❌ 연결 실패: ${err.message}`);
+                }
             } catch (err) {
-                alert('❌ 서버 연결 실패');
+                alert('❌ 서버 통신 오류');
+                console.error(err);
             }
         });
 
